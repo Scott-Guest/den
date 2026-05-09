@@ -192,12 +192,13 @@
         result = fx.handle {
           handlers = den.lib.aspects.fx.handlers.chainHandler;
           state = {
-            includesChain = [ ];
+            currentScope = "__test";
+            scopedIncludesChain = _: { };
           };
         } comp;
       in
       {
-        expr = result.state.includesChain;
+        expr = (result.state.scopedIncludesChain null).__test or [ ];
         expected = [
           "a"
           "b"
@@ -216,12 +217,13 @@
         result = fx.handle {
           handlers = den.lib.aspects.fx.handlers.chainHandler;
           state = {
-            includesChain = [ ];
+            currentScope = "__test";
+            scopedIncludesChain = _: { };
           };
         } comp;
       in
       {
-        expr = result.state.includesChain;
+        expr = (result.state.scopedIncludesChain null).__test or [ ];
         expected = [ "a" ];
       }
     );
@@ -235,15 +237,252 @@
         raw = fx.handle {
           handlers = den.lib.aspects.fx.handlers.chainHandler;
           state = {
-            includesChain = [ ];
+            currentScope = "__test";
+            scopedIncludesChain = _: { };
           };
         } comp;
-        # Force the includesChain thunk inside tryEval to catch the throw.
-        result = builtins.tryEval (builtins.deepSeq raw.state.includesChain raw.state.includesChain);
+        # Force the scopedIncludesChain thunk inside tryEval to catch the throw.
+        result = builtins.tryEval (
+          builtins.deepSeq ((raw.state.scopedIncludesChain) null) ((raw.state.scopedIncludesChain) null)
+        );
       in
       {
         expr = result.success;
         expected = false;
+      }
+    );
+
+    # --- ctx-seen handler tests ---
+
+    # ctx-seen tracks seen keys and reports isFirst correctly.
+    test-ctx-seen-dedup = denTest (
+      { den, ... }:
+      let
+        fx = den.lib.fx;
+        handlers = den.lib.aspects.fx.handlers;
+        comp = fx.bind (fx.send "ctx-seen" "key-a") (
+          first:
+          fx.bind (fx.send "ctx-seen" "key-b") (
+            second:
+            fx.bind (fx.send "ctx-seen" "key-a") (
+              third:
+              fx.pure [
+                first
+                second
+                third
+              ]
+            )
+          )
+        );
+        result = fx.handle {
+          handlers = handlers.ctxSeenHandler;
+          state = {
+            seen = _: { };
+          };
+        } comp;
+      in
+      {
+        expr = map (r: r.isFirst) result.value;
+        expected = [
+          true
+          true
+          false
+        ];
+      }
+    );
+
+    # --- emit-class / classCollectorHandler tests ---
+
+    # classCollectorHandler collects matching class, skips others.
+    test-class-collector-filters = denTest (
+      { den, ... }:
+      let
+        fx = den.lib.fx;
+        handlers = den.lib.aspects.fx.handlers;
+        comp = fx.seq [
+          (fx.send "emit-class" {
+            class = "nixos";
+            identity = "a";
+            module = {
+              x = 1;
+            };
+          })
+          (fx.send "emit-class" {
+            class = "packages";
+            identity = "b";
+            module = {
+              y = 2;
+            };
+          })
+          (fx.send "emit-class" {
+            class = "nixos";
+            identity = "c";
+            module = {
+              z = 3;
+            };
+          })
+        ];
+        result = fx.handle {
+          handlers = handlers.classCollectorHandler;
+          state = {
+            classImports = _: { };
+            currentScope = "__test";
+            scopedClassImports = _: { };
+          };
+        } comp;
+      in
+      {
+        expr = builtins.length (
+          (builtins.foldl' (
+            acc: sd:
+            lib.zipAttrsWith (_: builtins.concatLists) [
+              acc
+              sd
+            ]
+          ) { } (builtins.attrValues (result.state.scopedClassImports null))).nixos or [ ]
+        );
+        expected = 2;
+      }
+    );
+
+    # --- defer-include / drain-deferred handler tests ---
+
+    # defer-include accumulates into deferredIncludes thunk chain.
+    test-defer-include-accumulates = denTest (
+      { den, ... }:
+      let
+        fx = den.lib.fx;
+        handlers = den.lib.aspects.fx.handlers;
+        comp =
+          fx.bind
+            (fx.send "defer" {
+              child = {
+                name = "a";
+                __fn = _: { };
+                __args = {
+                  host = false;
+                };
+              };
+              requiredKeys = [ "host" ];
+              requiredArgs = [ "host" ];
+            })
+            (
+              _:
+              fx.send "defer" {
+                child = {
+                  name = "b";
+                  __fn = _: { };
+                  __args = {
+                    user = false;
+                  };
+                };
+                requiredKeys = [ "user" ];
+                requiredArgs = [ "user" ];
+              }
+            );
+        result = fx.handle {
+          handlers = handlers.deferHandler // {
+            "resolve-complete" =
+              { param, state }:
+              {
+                resume = param;
+                inherit state;
+              };
+          };
+          state = {
+            currentScope = "__test";
+            scopedDeferredIncludes = _: { };
+          };
+        } comp;
+      in
+      {
+        expr = builtins.length ((result.state.scopedDeferredIncludes null).__test or [ ]);
+        expected = 2;
+      }
+    );
+
+    # drain-deferred returns satisfiable entries and keeps the rest.
+    test-drain-deferred-partitions = denTest (
+      { den, ... }:
+      let
+        fx = den.lib.fx;
+        handlers = den.lib.aspects.fx.handlers;
+        deferredA = {
+          child = {
+            name = "needs-host";
+          };
+          requiredArgs = [ "host" ];
+        };
+        deferredB = {
+          child = {
+            name = "needs-user";
+          };
+          requiredArgs = [ "user" ];
+        };
+        comp = fx.send "drain" { host = { }; };
+        result = fx.handle {
+          handlers = handlers.drainHandler;
+          state = {
+            currentScope = "__test";
+            scopedDeferredIncludes = _: {
+              __test = [
+                deferredA
+                deferredB
+              ];
+            };
+          };
+        } comp;
+        satisfiable = result.value;
+        remaining = (result.state.scopedDeferredIncludes null).__test or [ ];
+      in
+      {
+        expr = {
+          satisfiedCount = builtins.length satisfiable;
+          satisfiedName = (builtins.head satisfiable).child.name;
+          remainingCount = builtins.length remaining;
+          remainingName = (builtins.head remaining).child.name;
+        };
+        expected = {
+          satisfiedCount = 1;
+          satisfiedName = "needs-host";
+          remainingCount = 1;
+          remainingName = "needs-user";
+        };
+      }
+    );
+
+    # drain-deferred with empty context returns nothing.
+    test-drain-deferred-empty-ctx = denTest (
+      { den, ... }:
+      let
+        fx = den.lib.fx;
+        handlers = den.lib.aspects.fx.handlers;
+        deferred = {
+          child = {
+            name = "needs-host";
+          };
+          requiredArgs = [ "host" ];
+        };
+        comp = fx.send "drain" { };
+        result = fx.handle {
+          handlers = handlers.drainHandler;
+          state = {
+            currentScope = "__test";
+            scopedDeferredIncludes = _: {
+              __test = [ deferred ];
+            };
+          };
+        } comp;
+      in
+      {
+        expr = {
+          satisfiedCount = builtins.length result.value;
+          remainingCount = builtins.length ((result.state.scopedDeferredIncludes null).__test or [ ]);
+        };
+        expected = {
+          satisfiedCount = 0;
+          remainingCount = 1;
+        };
       }
     );
 

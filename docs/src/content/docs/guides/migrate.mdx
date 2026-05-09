@@ -17,7 +17,7 @@ Migration to Den is incremental. You do not need to rewrite everything at once.
 
     ```nix
     {
-      inputs.den.url = "github:vic/den";
+      inputs.den.url = "github:denful/den";
       inputs.import-tree.url = "github:vic/import-tree";
 
       outputs = inputs: inputs.flake-parts.lib.mkFlake { inherit inputs; }
@@ -49,10 +49,10 @@ Migration to Den is incremental. You do not need to rewrite everything at once.
     ```nix
     # modules/legacy.nix
     { den, ... }: {
-      den.ctx.host.includes = [
+      den.schema.host.includes = [
         (den.provides.import-tree._.host ./hosts)
       ];
-      den.ctx.user.includes = [
+      den.schema.user.includes = [
         (den.provides.import-tree._.user ./users)
       ];
     }

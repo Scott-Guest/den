@@ -13,7 +13,6 @@
       let
         hostSelf = {
           name = "host";
-          into = _: { };
           provides = { };
           nixos = {
             networking.hostName = "igloo";
@@ -32,9 +31,7 @@
         result = den.lib.aspects.fx.pipeline.fxResolve {
           class = "nixos";
           self = hostSelf;
-          ctx = {
-            host = "igloo";
-          };
+          ctx = { };
         };
       in
       {
@@ -44,9 +41,9 @@
       }
     );
 
-    # Self-provide: emitSelfProvide produces an include from provides.${name}.
+    # Self-provide: emitAspectPolicies produces an include from provides.${name}.
     # In the full module system, ctx-apply handles this before the pipeline.
-    # Here we test emitSelfProvide directly.
+    # Here we test emitAspectPolicies directly.
     test-self-provider = denTest (
       { den, ... }:
       let
@@ -69,7 +66,7 @@
           };
           includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.emitSelfProvide hostSelf;
+        comp = den.lib.aspects.fx.aspect.emitAspectPolicies hostSelf;
         result = fx.handle {
           handlers = {
             "emit-include" =

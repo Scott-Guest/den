@@ -11,16 +11,14 @@ Den's core (`/default.nix`) is domain-agnostic. It provides:
 
 | Function | Purpose |
 |---|---|
-| `parametric` | Wrap an aspect with context-aware dispatch |
-| `parametric.atLeast` | Match functions with at least the given params |
-| `parametric.exactly` | Match functions with exactly the given params |
+| `parametric` | *(deprecated)* Context dispatch now happens automatically |
+| `parametric.atLeast` | *(deprecated)* Use bare functions — dispatch is automatic |
+| `parametric.exactly` | *(deprecated)* Use bare functions — dispatch is automatic |
 | `parametric.fixedTo` | Apply an aspect with a fixed context |
 | `parametric.expands` | Extend context before dispatch |
 | `canTake` | Check if a function accepts given arguments |
-| `take.atLeast` / `take.exactly` | Conditionally apply functions |
-| `statics` | Extract only static includes from an aspect |
+| `take.atLeast` / `take.exactly` | *(deprecated)* Dispatch is now handled by the pipeline |
 | `owned` | Extract only owned configs (no includes, no functor) |
-| `isFn` | Check if value is a function or has `__functor` |
 | `__findFile` | Angle bracket resolution for deep aspect paths |
 | `aspects` | Den aspects API (resolve, types) |
 
@@ -29,7 +27,7 @@ These primitives compose into context transformation pipelines for any domain.
 ## Using Den for Non-OS Domains
 
 <Aside title="Source" icon="github">
-[default.nix](https://github.com/vic/den/tree/main/default.nix) - [CI test: den-as-lib.nix](https://github.com/vic/den/tree/main/templates/ci/modules/features/den-as-lib.nix)
+[default.nix](https://github.com/denful/den/tree/main/default.nix) - [CI test: den-as-lib.nix](https://github.com/denful/den/tree/main/templates/ci/modules/features/den-as-lib.nix)
 </Aside>
 
 Nothing about `den.lib` assumes NixOS, Darwin, or Home Manager. You can build
@@ -39,8 +37,9 @@ context pipelines for any Nix module system:
 # see den-as-lib.nix CI test for working example
 
 # Define aspects for a custom domain
+# den.lib.parametric is deprecated — bare attrsets work directly:
 den.aspects = {
-  web-server = den.lib.parametric {
+  web-server = {
     terranix.resource.aws_instance.web = { ami = "..."; };
     includes = [
       # configures using the terranix Nix class
@@ -59,7 +58,7 @@ module = den.lib.aspects.resolve "terranix" [] aspect;
 On top of the library, Den provides `modules/` which implement:
 
 - **Schema types** (`den.hosts`, `den.homes`) for declaring NixOS/Darwin/HM entities
-- **Context pipeline** (`den.ctx.host`, `den.ctx.user`, `den.ctx.home`) for OS configurations
+- **Aspects & Policies** (`den.aspects`, `den.policies`) for the resolution pipeline
 - **Batteries** (`den.provides.*`) for common OS configuration patterns
 - **Output generation** (`modules/config.nix`) instantiating configurations into flake outputs
 
@@ -75,7 +74,7 @@ flowchart TD
   end
   subgraph "Den Framework (OS-specific)"
     schema["den.hosts / den.homes"]
-    ctx["den.ctx pipeline"]
+    ctx["den.schema + den.policies"]
     batteries["den.provides"]
     output["flake output generation"]
   end

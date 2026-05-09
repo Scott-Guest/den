@@ -5,14 +5,16 @@
     test-self-named-provider = denTest (
       { den, funnyNames, ... }:
       {
-        den.ctx.greet.description = "{who} context";
-        den.ctx.greet.provides.greet =
-          { who }:
-          {
-            funny.names = [ "hello-${who}" ];
-          };
+        den.schema.greet.includes = [
+          (
+            { who }:
+            {
+              funny.names = [ "hello-${who}" ];
+            }
+          )
+        ];
 
-        expr = funnyNames (den.ctx.greet { who = "nix"; });
+        expr = funnyNames (den.lib.resolveEntity "greet" { who = "nix"; });
         expected = [ "hello-nix" ];
       }
     );
@@ -20,15 +22,17 @@
     test-self-named-plus-owned = denTest (
       { den, funnyNames, ... }:
       {
-        den.ctx.greet.description = "{who} context";
-        den.ctx.greet.provides.greet =
-          { who }:
-          {
-            funny.names = [ "hello-${who}" ];
-          };
-        den.ctx.greet.funny.names = [ "owned" ];
+        den.schema.greet.includes = [
+          (
+            { who }:
+            {
+              funny.names = [ "hello-${who}" ];
+            }
+          )
+          { funny.names = [ "owned" ]; }
+        ];
 
-        expr = funnyNames (den.ctx.greet { who = "nix"; });
+        expr = funnyNames (den.lib.resolveEntity "greet" { who = "nix"; });
         expected = [
           "hello-nix"
           "owned"
@@ -44,21 +48,31 @@
         ...
       }:
       {
-        den.ctx.greet.provides.greet =
-          { who }:
-          {
-            funny.names = [ "hello-${who}" ];
-          };
-
-        den.ctx.greet.into.other = lib.singleton;
-        den.ctx.greet.provides.other =
-          _:
-          { who }:
-          {
-            funny.names = [ "other-${who}" ];
-          };
-
-        expr = funnyNames (den.ctx.greet { who = "nix"; });
+        den.schema.other.includes = [ ];
+        den.policies.test-greet-to-other =
+          { who, ... }@ctx:
+          let
+            inherit (den.lib.policy) resolve include;
+          in
+          [
+            (resolve.to "other" ctx)
+            (include (
+              { who }:
+              {
+                funny.names = [ "other-${who}" ];
+              }
+            ))
+          ];
+        den.schema.greet.includes = [
+          (
+            { who }:
+            {
+              funny.names = [ "hello-${who}" ];
+            }
+          )
+          den.policies.test-greet-to-other
+        ];
+        expr = funnyNames (den.lib.resolveEntity "greet" { who = "nix"; });
         expected = [
           "hello-nix"
           "other-nix"
@@ -74,21 +88,31 @@
         ...
       }:
       {
-        den.ctx.greet.description = "{who} context";
-        den.ctx.greet.provides.greet =
-          { who }:
-          {
-            funny.names = [ who ];
-          };
-        den.ctx.greet.into.yell = { who }: [ { shout = lib.toUpper who; } ];
-
-        den.ctx.yell.provides.yell =
-          { shout }:
-          {
-            funny.names = [ shout ];
-          };
-
-        expr = funnyNames (den.ctx.greet { who = "world"; });
+        den.schema.yell.includes = [ ];
+        den.policies.test-greet-to-yell =
+          { who, ... }:
+          let
+            inherit (den.lib.policy) resolve include;
+          in
+          [
+            (resolve.to "yell" { shout = lib.toUpper who; })
+            (include (
+              { shout }:
+              {
+                funny.names = [ shout ];
+              }
+            ))
+          ];
+        den.schema.greet.includes = [
+          (
+            { who }:
+            {
+              funny.names = [ who ];
+            }
+          )
+          den.policies.test-greet-to-yell
+        ];
+        expr = funnyNames (den.lib.resolveEntity "greet" { who = "world"; });
         expected = [
           "WORLD"
           "world"
@@ -104,40 +128,63 @@
         ...
       }:
       {
-        den.ctx.greet.description = "{who} context";
-        den.ctx.greet.provides.greet =
-          { who }:
-          {
-            funny.names = [ who ];
-          };
-        den.ctx.greet.into =
-          { who }:
-          {
-            yell = [ { shout = lib.toUpper who; } ];
-            size = [ { length = lib.stringLength who; } ];
-            num = [ { number = lib.stringLength who; } ];
-          };
-
-        den.ctx.yell.provides.yell =
-          { shout }:
-          {
-            funny.names = [ shout ];
-          };
-
-        den.ctx.size.provides.size =
-          { length }:
-          {
-            funny.names = [ (lib.toString length) ];
-          };
-
-        den.ctx.greet.provides.num =
-          _:
-          { number }:
-          {
-            funny.names = [ ("num:" + lib.toString number) ];
-          };
-
-        expr = funnyNames (den.ctx.greet { who = "world"; });
+        den.schema.yell.includes = [ ];
+        den.schema.size.includes = [ ];
+        den.schema.num.includes = [ ];
+        den.policies.test-greet-to-yell-fn =
+          { who, ... }:
+          let
+            inherit (den.lib.policy) resolve include;
+          in
+          [
+            (resolve.to "yell" { shout = lib.toUpper who; })
+            (include (
+              { shout }:
+              {
+                funny.names = [ shout ];
+              }
+            ))
+          ];
+        den.policies.test-greet-to-size =
+          { who, ... }:
+          let
+            inherit (den.lib.policy) resolve include;
+          in
+          [
+            (resolve.to "size" { length = lib.stringLength who; })
+            (include (
+              { length }:
+              {
+                funny.names = [ (lib.toString length) ];
+              }
+            ))
+          ];
+        den.policies.test-greet-to-num =
+          { who, ... }:
+          let
+            inherit (den.lib.policy) resolve include;
+          in
+          [
+            (resolve.to "num" { number = lib.stringLength who; })
+            (include (
+              { number }:
+              {
+                funny.names = [ ("num:" + lib.toString number) ];
+              }
+            ))
+          ];
+        den.schema.greet.includes = [
+          (
+            { who }:
+            {
+              funny.names = [ who ];
+            }
+          )
+          den.policies.test-greet-to-yell-fn
+          den.policies.test-greet-to-size
+          den.policies.test-greet-to-num
+        ];
+        expr = funnyNames (den.lib.resolveEntity "greet" { who = "world"; });
         expected = [
           "5"
           "WORLD"

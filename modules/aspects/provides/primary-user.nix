@@ -1,4 +1,4 @@
-{ lib, den, ... }:
+{ ... }:
 let
   description = ''
     Sets user as *primary*.
@@ -16,6 +16,7 @@ let
   userToHostContext =
     { user, host, ... }:
     {
+      name = "primary-user(${user.userName}@${host.name})";
       inherit description;
       darwin.system.primaryUser = user.userName;
       wsl.defaultUser = user.userName;
@@ -30,5 +31,5 @@ let
 
 in
 {
-  den.provides.primary-user = den.lib.take.exactly userToHostContext;
+  den.provides.primary-user = userToHostContext;
 }

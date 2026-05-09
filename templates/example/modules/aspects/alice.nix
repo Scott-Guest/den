@@ -1,4 +1,9 @@
-{ den, eg, ... }:
+{
+  den,
+  lib,
+  eg,
+  ...
+}:
 {
   den.aspects.alice = {
 
@@ -30,6 +35,8 @@
         # den included batteries that provide common configs.
         <den/primary-user> # alice is admin always.
         (<den/user-shell> "fish") # default user shell
+        # explicit policy activation
+        den.aspects.alice.policies.to-igloo
       ];
 
     # Alice configures NixOS hosts it lives on.
@@ -46,17 +53,22 @@
         home.packages = [ pkgs.htop ];
       };
 
-    # <user>.provides.<host>, via den.provides.mutual-provider
-    provides.igloo =
-      { host, ... }:
-      {
-        nixos.programs.nh.enable = true;
-      };
+    # <user>.policies.<name>, aspect-included policy
+    # Delivers NixOS config to the host (cross-scope via policy.provide).
+    policies.to-igloo =
+      { host, user, ... }:
+      lib.optional (host.name == "igloo") (
+        den.lib.policy.provide {
+          class = "nixos";
+          module.programs.nh.enable = true;
+        }
+      );
+
   };
 
   # This is a context-aware aspect, that emits configurations
   # **anytime** at least the `user` data is in context.
-  # read more at https://vic.github.io/den/context-aware.html
+  # read more at https://den.oeiuwq.com/explanation/parametric/
   den.aspects.cooper =
     { user, ... }:
     {

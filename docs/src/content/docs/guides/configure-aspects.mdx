@@ -6,9 +6,9 @@ description: Owned configs, includes, provides, and den.default.
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="Source" icon="github">
-[`lib/aspects`](https://github.com/vic/den/tree/main/lib/aspects) ·
-[`aspects definition`](https://github.com/vic/den/tree/main/modules/aspects/definition.nix) ·
-[`example aspects`](https://github.com/vic/den/tree/main/modules/aspects/provides) ·
+[`nix/lib/aspects`](https://github.com/denful/den/tree/main/nix/lib/aspects) ·
+[`aspects definition`](https://github.com/denful/den/tree/main/modules/aspects/definition.nix) ·
+[`example aspects`](https://github.com/denful/den/tree/main/modules/aspects/provides) ·
 </Aside>
 
 # Den created aspects.
@@ -163,6 +163,39 @@ den.aspects.alice.provides.work-vpn = { host, user, ... }:
   };
 ```
 
+### Cross-entity provides
+
+Three special `provides` keys route configuration across entity boundaries.
+They fire automatically during the tree walk — no manual policy wiring needed:
+
+```nix
+den.aspects.igloo = {
+  # Deliver to ALL users on this host
+  provides.to-users = { user, ... }: {
+    homeManager.programs.helix.enable = user.name == "alice";
+  };
+
+  # Deliver to a specific user by name
+  provides.alice.homeManager.programs.vim.enable = true;
+};
+
+den.aspects.tux = {
+  # Deliver to ALL hosts this user lives on
+  provides.to-hosts = { host, ... }: {
+    nixos.programs.nh.enable = host.name == "igloo";
+  };
+
+  # Deliver to a specific host by name
+  provides.igloo.nixos.programs.emacs.enable = true;
+};
+```
+
+<Aside>
+For new configurations, prefer `den.policies` with explicit `policy.include`
+for cross-entity delivery — it's more flexible and explicit. The `provides`
+patterns above are a permanent API for existing usage.
+</Aside>
+
 ## Global Defaults
 
 `den.default` is a special aspect applied to every host, user, and home:
@@ -183,7 +216,10 @@ den.aspects.alice.provides.work-vpn = { host, user, ... }:
 <Aside type="caution">
 Owned configs from `den.default` are deduplicated across pipeline stages.
 Parametric functions in `den.default.includes` are evaluated at every context
-stage. Use `den.lib.take.exactly` if a function should only run in specific contexts.
+stage. The pipeline handles dispatch automatically based on function argument
+shape: a function taking `{ host }` only runs in host contexts, `{ host, user }`
+only in user contexts. Write your includes as bare functions — no extra wrapper
+is needed. (`den.lib.take.exactly` is deprecated.)
 </Aside>
 
 ## Aspect Meta-Data
@@ -191,7 +227,7 @@ stage. Use `den.lib.take.exactly` if a function should only run in specific cont
 Aspects have a `meta` submodule that can be used to attach meta-data
 at the aspect-level.
 
-This is useful for [introspection, for example](https://github.com/vic/den/commit/809834982bb92e77228c91b9c24be8b17c06dfd3), using some key to filter out aspects
+This is useful for [introspection, for example](https://github.com/denful/den/commit/809834982bb92e77228c91b9c24be8b17c06dfd3), using some key to filter out aspects
 or communicate information about aspects to other tooling like graph generators.
 
 Since `.meta` is a freeformType you can add any custom attribute or import a module on it.

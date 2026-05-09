@@ -1,4 +1,4 @@
-# Tests for den's aspectToEffect — the aspect compiler.
+# Tests for den's den.lib.fx.send "resolve" — the aspect compiler.
 {
   denTest,
   inputs,
@@ -7,49 +7,66 @@
 }:
 let
   # Test handler set that collects emitted effects.
-  collectHandlers = {
-    "emit-class" =
-      { param, state }:
-      {
-        resume = null;
-        state = state // {
-          classes = (state.classes or [ ]) ++ [ param ];
+  # emitIncludes now classifies children and sends typed effects
+  # (check-dedup, resolve-aspect, etc.) instead of a single emit-include.
+  # These mock handlers return children as-is without recursive resolution.
+  mkCollectHandlers =
+    den:
+    let
+      fx = den.lib.fx;
+      handlers = den.lib.aspects.fx.handlers;
+    in
+    handlers.includeHandler
+    // handlers.checkDedupHandler
+    // handlers.constraintRegistryHandler
+    // handlers.chainHandler
+    // den.lib.aspects.fx.identity.pathSetHandler
+    // den.lib.aspects.fx.identity.collectPathsHandler
+    // handlers.resolveHandler
+    // handlers.compileHandler
+    // handlers.gateHandler
+    // handlers.compileStaticHandler
+    // handlers.compileParametricHandler
+    // handlers.compileConditionalHandler
+    // handlers.compileForwardHandler
+    // handlers.bindHandler
+    // handlers.deferHandler
+    // handlers.drainHandler
+    // handlers.classifyHandler
+    // handlers.emitClassesHandler
+    // handlers.resolveChildrenHandler
+    // {
+      "emit-class" =
+        { param, state }:
+        {
+          resume = null;
+          state = state // {
+            classes = (state.classes or [ ]) ++ [ param ];
+          };
         };
-      };
-    "emit-include" =
-      { param, state }:
-      {
-        # For these tests, just return the child as-is (no recursive resolution).
-        # emitIncludes sends { child, idx } — extract the child.
-        resume = [ (param.child or param) ];
-        inherit state;
-      };
-    "register-constraint" =
-      { param, state }:
-      {
-        resume = null;
-        state = state // {
-          constraints = (state.constraints or [ ]) ++ [ param ];
+      "register-constraint" =
+        { param, state }:
+        {
+          resume = null;
+          state = state // {
+            constraints = (state.constraints or [ ]) ++ [ param ];
+          };
         };
-      };
-    "chain-push" =
-      { param, state }:
-      {
-        resume = null;
-        inherit state;
-      };
-    "chain-pop" =
-      { param, state }:
-      {
-        resume = null;
-        inherit state;
-      };
-    "resolve-complete" =
-      { param, state }:
-      {
-        resume = param;
-        inherit state;
-      };
+      "resolve-complete" =
+        { param, state }:
+        {
+          resume = param;
+          inherit state;
+        };
+    }
+    // fx.effects.state.handler;
+
+  defaultState = {
+    currentScope = "__test";
+    scopedIncludesChain = _: { };
+    scopedConstraintRegistry = _: { };
+    scopedConstraintFilters = _: { };
+    paths = [ ];
   };
 in
 {
@@ -62,15 +79,19 @@ in
         aspect = {
           name = "myAspect";
           meta = { };
-          nixosModules = {
+          nixos = {
             enable = true;
           };
           includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+        comp = den.lib.fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
+        };
         result = den.lib.fx.handle {
-          handlers = collectHandlers;
-          state = { };
+          handlers = mkCollectHandlers den;
+          state = defaultState;
         } comp;
       in
       {
@@ -78,11 +99,11 @@ in
           classCount = builtins.length result.state.classes;
           className = (builtins.head result.state.classes).class;
           module = (builtins.head result.state.classes).module;
-          resolvedName = result.value.name;
+          resolvedName = (builtins.head result.value).name;
         };
         expected = {
           classCount = 1;
-          className = "nixosModules";
+          className = "nixos";
           module = {
             enable = true;
           };
@@ -98,26 +119,30 @@ in
         aspect = {
           name = "multiClass";
           meta = { };
-          nixosModules = {
+          nixos = {
             x = 1;
           };
-          homeModules = {
+          homeManager = {
             y = 2;
           };
           includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+        comp = den.lib.fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
+        };
         result = den.lib.fx.handle {
-          handlers = collectHandlers;
-          state = { };
+          handlers = mkCollectHandlers den;
+          state = defaultState;
         } comp;
         classNames = map (c: c.class) result.state.classes;
       in
       {
         expr = builtins.sort builtins.lessThan classNames;
         expected = [
-          "homeModules"
-          "nixosModules"
+          "homeManager"
+          "nixos"
         ];
       }
     );
@@ -129,23 +154,25 @@ in
         aspect = {
           name = "paramAspect";
           meta = { };
-          __functor =
-            self:
+          __fn =
             { host }:
             {
-              nixosModules = {
+              nixos = {
                 hostName = host;
               };
               includes = [ ];
             };
-          __functionArgs = {
+          __args = {
             host = false;
           };
-          includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+        comp = den.lib.fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
+        };
         result = den.lib.fx.handle {
-          handlers = collectHandlers // {
+          handlers = mkCollectHandlers den // {
             host =
               { param, state }:
               {
@@ -153,14 +180,14 @@ in
                 inherit state;
               };
           };
-          state = { };
+          state = defaultState;
         } comp;
       in
       {
         expr = {
           classCount = builtins.length result.state.classes;
           module = (builtins.head result.state.classes).module;
-          resolvedName = result.value.name;
+          resolvedName = (builtins.head result.value).name;
         };
         expected = {
           classCount = 1;
@@ -181,15 +208,19 @@ in
         aspect = {
           name = "staticAspect";
           meta = { };
-          nixosModules = {
+          nixos = {
             enabled = true;
           };
           includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+        comp = den.lib.fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
+        };
         result = den.lib.fx.handle {
-          handlers = collectHandlers;
-          state = { };
+          handlers = mkCollectHandlers den;
+          state = defaultState;
         } comp;
       in
       {
@@ -228,16 +259,20 @@ in
             childB
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+        comp = den.lib.fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
+        };
         result = den.lib.fx.handle {
-          handlers = collectHandlers;
-          state = { };
+          handlers = mkCollectHandlers den;
+          state = defaultState;
         } comp;
       in
       {
         expr = {
-          includeCount = builtins.length result.value.includes;
-          firstChild = (builtins.head result.value.includes).name;
+          includeCount = builtins.length (builtins.head result.value).includes;
+          firstChild = (builtins.head (builtins.head result.value).includes).name;
         };
         expected = {
           includeCount = 2;
@@ -267,10 +302,14 @@ in
           };
           includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+        comp = den.lib.fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
+        };
         result = den.lib.fx.handle {
-          handlers = collectHandlers;
-          state = { };
+          handlers = mkCollectHandlers den;
+          state = defaultState;
         } comp;
       in
       {

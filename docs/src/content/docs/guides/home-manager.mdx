@@ -7,10 +7,10 @@ import { Aside } from '@astrojs/starlight/components';
 
 
 <Aside title="Source" icon="github">
-[`home-manager.nix`](https://github.com/vic/den/blob/main/modules/aspects/provides/home-manager.nix) ·
-[`hjem.nix`](https://github.com/vic/den/blob/main/modules/aspects/provides/hjem.nix) ·
-[`maid.nix`](https://github.com/vic/den/blob/main/modules/aspects/provides/maid.nix) ·
-[`home-env.nix`](https://github.com/vic/den/blob/main/nix/home-env.nix)
+[`home-manager.nix`](https://github.com/denful/den/blob/main/modules/aspects/provides/home-manager.nix) ·
+[`hjem.nix`](https://github.com/denful/den/blob/main/modules/aspects/provides/hjem.nix) ·
+[`maid.nix`](https://github.com/denful/den/blob/main/modules/aspects/provides/maid.nix) ·
+[`home-env.nix`](https://github.com/denful/den/blob/main/nix/home-env.nix)
 </Aside>
 
 ## Enabling Homes
@@ -32,7 +32,7 @@ den.hosts.x86_64-linux.igloo.users.tux.classes = [ "homeManager" "hjem" ];
 den.schema.user.classes = lib.mkDefault [ "homeManager" ];
 ```
 
-Home integration contexts, like `den.ctx.hm-host` only activate when
+Home integration stages, like `hm-host` only activate when
 at least one host user has `homeManager` in their `classes`.
 If so, the integration imports the HomeManager OS module, 
 and forwards each user's `homeManager` class into `home-manager.users.<userName>`.
@@ -48,15 +48,15 @@ Same details regarding `home-manager` apply to other home types like `hjem` and 
 
 ```mermaid
 flowchart TD
-  host["den.ctx.host"] -->|"into.hm-host"| hmhost["den.ctx.hm-host"]
+  host["host stage"] -->|"host-to-hm-host policy"| hmhost["hm-host stage"]
   hmhost -->|"imports HM module"| mod["home-manager.nixosModules"]
-  hmhost -->|"into.hm-user (per user)"| hmuser["den.ctx.hm-user"]
+  hmhost -->|"hm-host-to-hm-user policy (per user)"| hmuser["hm-user stage"]
   hmuser -->|"forward homeManager class"| target["home-manager.users.alice"]
 ```
 
 1. `hm-os.nix` detects hosts with HM-enabled users and supported OS class.
-2. It produces `den.ctx.hm-host`, which imports the HM OS-level module.
-3. `hm-integration.nix` creates `den.ctx.hm-user` per HM user, forwarding
+2. It produces the `hm-host` stage, which imports the HM OS-level module.
+3. `hm-integration.nix` creates the `hm-user` stage per HM user, forwarding
    the `homeManager` class into `home-manager.users.<userName>`.
 
 ### Configuring Home Manager
@@ -79,7 +79,7 @@ Override the HM module per host if needed:
 
 ```nix
 den.hosts.x86_64-linux.laptop = {
-  users.vic.classes = [ "home-manager" ];
+  users.vic.classes = [ "homeManager" ];
   home-manager.module = inputs.home-manager-unstable.nixosModules.home-manager;
 };
 ```
@@ -132,12 +132,12 @@ managed machine outside of your control.
 #### Host-specific standalone home configuration
 
 To create host-specific configurations for your standalone home, you can use the
-[`den.provides.mutual-provider`](https://github.com/vic/den/blob/main/modules/aspects/provides/mutual-provider.nix)
+[`den.provides.mutual-provider`](https://github.com/denful/den/blob/main/modules/aspects/provides/mutual-provider.nix)
 battery:
 
 ```nix
 den.homes.x86_64-linux."tux@igloo" = { };
-den.ctx.user.includes = [ den._.mutual-provider ];
+den.schema.user.includes = [ den._.mutual-provider ];
 ```
 
 You can then configure it using the following aspect:

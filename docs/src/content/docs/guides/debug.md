@@ -40,20 +40,33 @@ Then in REPL:
 nix-repl> :lf .
 nix-repl> den.aspects.igloo
 nix-repl> den.hosts.x86_64-linux.igloo
-nix-repl> den.ctx
+nix-repl> den.policies
 ```
+
+## Inspect Policies
+
+Use `den.lib.policyInspect.inspect` to see which policies apply to an entity and where they route:
+
+```nix
+den.lib.policyInspect.inspect {
+  kind = "host";
+  context = { host = den.hosts.x86_64-linux.laptop; };
+}
+```
+
+This returns a set of matching policies with their targets, routing type, and source/destination entity kinds.
 
 ## Trace Aspect Includes
 
-Use the following example code to get a trace
-(list of nested `aspect.name`) of included aspects.
+The resolution pipeline includes built-in tracing via the `diag` library.
+Use `den.lib.diag.hostContext` to capture a full trace of which aspects are
+included and how they resolve. See [Diagrams](/explanation/diagrams/) for details.
 
 ```nix
-let
-  inherit (den.lib.aspects) resolve adapters;
-  aspect = den.hosts.x86_64-linux.resolved;
-in
-resolve.withAdapter adapters.trace "nixos" aspect
+# In a REPL:
+diag = den.lib.diag
+g = diag.hostContext { host = den.hosts.x86_64-linux.laptop; }
+diag.toMermaid g  # renders the full aspect graph
 ```
 
 ## Trace Context
@@ -82,18 +95,20 @@ den.aspects.laptop.includes = [
 
 ## Manually Resolve an Aspect
 
+Note: `den.lib.aspects.resolve` is internal to the pipeline. The examples below are useful
+for debugging but should not be used in production configurations.
+
 Test how an aspect resolves for a specific class:
 
 ```console
-nix-repl> module = den.lib.aspects.resolve "nixos" [] den.aspects.laptop;
+nix-repl> module = den.lib.aspects.resolve "nixos" den.aspects.laptop
 nix-repl> config = (lib.evalModules { modules = [ module ]; }).config
 ```
 
-For parametric aspects, apply context first:
+For context-dependent aspects, use the host's resolved output:
 
 ```console
-nix-repl> aspect = den.aspects.laptop { host = den.hosts.x86_64-linux.laptop; }
-nix-repl> module = den.lib.aspects.resolve "nixos" [] aspect;
+nix-repl> den.hosts.x86_64-linux.laptop.mainModule
 ```
 
 ## Inspect a Host's Main Module
@@ -108,10 +123,14 @@ nix-repl> cfg.networking.hostName
 
 **Duplicate values in lists**: Den deduplicates owned and static configs
 from `den.default`, but parametric functions in `den.default.includes`
-run at every context stage. Use `den.lib.perHost` to restrict:
+run at every context stage. The pipeline handles dispatch automatically
+based on function argument shape — write a bare function with the context
+args you need. (`den.lib.perHost` is deprecated.)
 
 ```nix
-den.lib.perHost ({ host }: { nixos.x = 1; })
+# Deprecated: den.lib.perHost ({ host }: { nixos.x = 1; })
+# Modern — bare function; only runs in host contexts:
+({ host }: { nixos.x = 1; })
 ```
 
 **Missing attribute**: The context does not have the expected parameter.

@@ -1,4 +1,4 @@
-# Tests for the unified emit-include handler with aspectToEffect.
+# Tests for the unified emit-include handler with fx.send "resolve".
 {
   denTest,
   inputs,
@@ -6,14 +6,45 @@
   ...
 }:
 let
-  # Minimal handler set for testing aspectToEffect + includeHandler.
+  # Minimal handler set for testing fx.send "resolve" + includeHandler.
   mkTestHandlers =
     {
       den,
       extraHandlers ? { },
     }:
+    let
+      fx = den.lib.fx;
+    in
     den.lib.aspects.fx.handlers.includeHandler
+    // den.lib.aspects.fx.handlers.checkDedupHandler
     // den.lib.aspects.fx.handlers.constraintRegistryHandler
+    // den.lib.aspects.fx.handlers.resolveHandler
+    // den.lib.aspects.fx.handlers.compileHandler
+    // den.lib.aspects.fx.handlers.gateHandler
+    // den.lib.aspects.fx.handlers.compileStaticHandler
+    // den.lib.aspects.fx.handlers.compileParametricHandler
+    // den.lib.aspects.fx.handlers.compileConditionalHandler
+    // den.lib.aspects.fx.handlers.compileForwardHandler
+    // den.lib.aspects.fx.handlers.bindHandler
+    // den.lib.aspects.fx.handlers.deferHandler
+    // den.lib.aspects.fx.handlers.drainHandler
+    // den.lib.aspects.fx.handlers.classifyHandler
+    // den.lib.aspects.fx.handlers.emitClassesHandler
+    // den.lib.aspects.fx.handlers.resolveChildrenHandler
+    // {
+      # Fallback probe-arg for custom handler sets without constantHandler.
+      "probe-arg" =
+        { param, state }:
+        {
+          resume =
+            extraHandlers ? ${param}
+            || builtins.elem param [
+              "class"
+              "aspect-chain"
+            ];
+          inherit state;
+        };
+    }
     // den.lib.aspects.fx.handlers.chainHandler
     // den.lib.aspects.fx.identity.pathSetHandler
     // den.lib.aspects.fx.identity.collectPathsHandler
@@ -43,19 +74,21 @@ let
           inherit state;
         };
     }
-    // extraHandlers;
+    // extraHandlers
+    // fx.effects.state.handler;
 
   defaultState = {
-    includesChain = [ ];
-    constraintRegistry = { };
-    constraintFilters = [ ];
+    currentScope = "__test";
+    scopedIncludesChain = _: { };
+    scopedConstraintRegistry = _: { };
+    scopedConstraintFilters = _: { };
     paths = [ ];
   };
 in
 {
   flake.tests.fx-effectful-resolve = {
 
-    # Basic: parent with child, both resolved via aspectToEffect.
+    # Basic: parent with child, both resolved via fx.send "resolve".
     test-basic-aspectToEffect = denTest (
       { den, ... }:
       let
@@ -77,7 +110,11 @@ in
             }
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = mkTestHandlers { inherit den; };
           state = defaultState;
@@ -85,8 +122,8 @@ in
       in
       {
         expr = {
-          parentName = result.value.name;
-          childName = (builtins.head result.value.includes).name;
+          parentName = (builtins.head result.value).name;
+          childName = (builtins.head (builtins.head result.value).includes).name;
           classCount = builtins.length result.state.classes;
           resolvedNames = result.state.names;
         };
@@ -137,12 +174,16 @@ in
             }
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = mkTestHandlers { inherit den; } // den.lib.aspects.fx.handlers.constraintRegistryHandler;
           state = defaultState;
         } comp;
-        children = result.value.includes;
+        children = (builtins.head result.value).includes;
       in
       {
         expr = {
@@ -170,33 +211,39 @@ in
             {
               name = "web";
               meta = { };
-              __functor =
-                _:
+              __fn =
                 { host }:
                 {
                   nixos.hostName = host;
                   includes = [ ];
                 };
-              __functionArgs = {
+              __args = {
                 host = false;
               };
-              includes = [ ];
             }
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
+        hostHandler = {
+          host =
+            { param, state }:
+            {
+              resume = "igloo";
+              inherit state;
+            };
+        };
         result = fx.handle {
-          handlers = mkTestHandlers { inherit den; } // {
-            host =
-              { param, state }:
-              {
-                resume = "igloo";
-                inherit state;
-              };
+          handlers = mkTestHandlers {
+            inherit den;
+            extraHandlers = hostHandler;
           };
           state = defaultState;
         } comp;
-        child = builtins.head result.value.includes;
+        child = builtins.head (builtins.head result.value).includes;
       in
       {
         expr = child.nixos.hostName;
@@ -225,7 +272,11 @@ in
             }
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = mkTestHandlers { inherit den; };
           state = defaultState;
@@ -290,7 +341,11 @@ in
             }
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = mkTestHandlers { inherit den; } // den.lib.aspects.fx.handlers.constraintRegistryHandler;
           state = defaultState;
@@ -323,19 +378,27 @@ in
             )
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        hostHandler = {
+          host =
+            { param, state }:
+            {
+              resume = "igloo";
+              inherit state;
+            };
+        };
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
-          handlers = mkTestHandlers { inherit den; } // {
-            host =
-              { param, state }:
-              {
-                resume = "igloo";
-                inherit state;
-              };
+          handlers = mkTestHandlers {
+            inherit den;
+            extraHandlers = hostHandler;
           };
           state = defaultState;
         } comp;
-        child = builtins.head result.value.includes;
+        child = builtins.head (builtins.head result.value).includes;
       in
       {
         expr = child.nixos.hostName;

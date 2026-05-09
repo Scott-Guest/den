@@ -3,15 +3,24 @@
   flake.tests.mutual-provider = {
 
     test-host-provide-user = denTest (
-      { den, igloo, ... }:
+      {
+        den,
+        lib,
+        igloo,
+        ...
+      }:
+      let
+        inherit (den.lib.policy) include;
+      in
       {
         den.hosts.x86_64-linux.igloo.users.tux = { };
 
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
-
-        den.aspects.igloo.provides.tux = den.lib.parametric {
-          homeManager.home.shellAliases.g = "git";
-        };
+        den.aspects.igloo.policies.to-tux =
+          { host, user, ... }:
+          lib.optional (user.name == "tux") (include {
+            homeManager.home.shellAliases.g = "git";
+          });
+        den.aspects.igloo.includes = [ den.aspects.igloo.policies.to-tux ];
 
         expr = igloo.home-manager.users.tux.home.shellAliases;
 
@@ -20,15 +29,24 @@
     );
 
     test-user-provide-host = denTest (
-      { den, igloo, ... }:
+      {
+        den,
+        lib,
+        igloo,
+        ...
+      }:
+      let
+        inherit (den.lib.policy) include;
+      in
       {
         den.hosts.x86_64-linux.igloo.users.tux = { };
 
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
-
-        den.aspects.tux.provides.igloo = den.lib.parametric {
-          nixos.boot.crashDump.reservedMemory = "99999M";
-        };
+        den.aspects.tux.policies.to-igloo =
+          { host, user, ... }:
+          lib.optional (host.name == "igloo") (include {
+            nixos.boot.crashDump.reservedMemory = "99999M";
+          });
+        den.aspects.tux.includes = [ den.aspects.tux.policies.to-igloo ];
 
         expr = igloo.boot.crashDump.reservedMemory;
 
@@ -37,19 +55,31 @@
     );
 
     test-provide-each-other = denTest (
-      { den, igloo, ... }:
+      {
+        den,
+        lib,
+        igloo,
+        ...
+      }:
+      let
+        inherit (den.lib.policy) include;
+      in
       {
         den.hosts.x86_64-linux.igloo.users.tux = { };
 
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
+        den.aspects.igloo.policies.to-tux =
+          { host, user, ... }:
+          lib.optional (user.name == "tux") (include {
+            homeManager.home.keyboard.model = "denboard";
+          });
+        den.aspects.igloo.includes = [ den.aspects.igloo.policies.to-tux ];
 
-        den.aspects.igloo.provides.tux = den.lib.parametric {
-          homeManager.home.keyboard.model = "denboard";
-        };
-
-        den.aspects.tux.provides.igloo = den.lib.parametric {
-          nixos.boot.kernel.randstructSeed = "denseed";
-        };
+        den.aspects.tux.policies.to-igloo =
+          { host, user, ... }:
+          lib.optional (host.name == "igloo") (include {
+            nixos.boot.kernel.randstructSeed = "denseed";
+          });
+        den.aspects.tux.includes = [ den.aspects.tux.policies.to-igloo ];
 
         expr = [
           igloo.boot.kernel.randstructSeed
@@ -64,21 +94,35 @@
     );
 
     test-for-all = denTest (
-      { den, igloo, ... }:
+      {
+        den,
+        lib,
+        igloo,
+        ...
+      }:
+      let
+        inherit (den.lib.policy) include;
+      in
       {
         den.hosts.x86_64-linux.igloo.users.tux = { };
 
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
+        den.aspects.igloo.policies.to-users =
+          { host, user, ... }:
+          [
+            (include {
+              homeManager.home.keyboard.model = "denboard";
+            })
+          ];
+        den.aspects.igloo.includes = [ den.aspects.igloo.policies.to-users ];
 
-        den.aspects.igloo.provides.to-users = {
-          homeManager.home.keyboard.model = "denboard";
-        };
-
-        den.aspects.tux.provides.to-hosts =
-          { host, ... }:
-          {
-            nixos.boot.kernel.randstructSeed = "denseed@${host.name}";
-          };
+        den.aspects.tux.policies.to-hosts =
+          { host, user, ... }:
+          [
+            (include {
+              nixos.boot.kernel.randstructSeed = "denseed@${host.name}";
+            })
+          ];
+        den.aspects.tux.includes = [ den.aspects.tux.policies.to-hosts ];
 
         expr = [
           igloo.boot.kernel.randstructSeed

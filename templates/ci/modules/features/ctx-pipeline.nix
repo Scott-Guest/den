@@ -7,61 +7,103 @@ let
       let
         name = "c${toString i}";
         next = "c${toString (i + 1)}";
-        base = {
-          _.${name} =
-            { x }:
-            {
-              funny.names = [ "${name}-${x}" ];
-            };
+        baseStage = {
+          den.schema.${name}.includes = [
+            (
+              { x }:
+              {
+                funny.names = [ "${name}-${x}" ];
+              }
+            )
+          ];
         };
-        withInto = if i + 1 < n then { into.${next} = { x }: [ { x = "${x}+${toString i}"; } ]; } else { };
       in
       { den, ... }:
-      {
-        den.ctx.${name} = base // withInto;
-      }
+      lib.recursiveUpdate baseStage (
+        if i + 1 < n then
+          {
+            den.policies."${name}-to-${next}" =
+              { x, ... }: [ (den.lib.policy.resolve.to next { x = "${x}+${toString i}"; }) ];
+            den.schema.${name}.includes = baseStage.den.schema.${name}.includes ++ [
+              den.policies."${name}-to-${next}"
+            ];
+          }
+        else
+          { }
+      )
     ) n;
 
   mkFanOut =
     n:
     { den, ... }:
     {
-      den.ctx.root = {
-        _.root =
+      den.schema.leaf.includes = [ ];
+      den.policies.root-to-leaf =
+        { x, ... }:
+        let
+          inherit (den.lib.policy) resolve include;
+        in
+        map (i: resolve.to "leaf" { x = "${x}-${toString i}"; }) (lib.genList (i: i) n)
+        ++ [
+          (include (
+            { x }:
+            {
+              funny.names = [ "leaf-${x}" ];
+            }
+          ))
+        ];
+      den.schema.root.includes = [
+        den.policies.root-to-leaf
+        (
           { x }:
           {
             funny.names = [ "root-${x}" ];
-          };
-        into.leaf = { x }: lib.genList (i: { x = "${x}-${toString i}"; }) n;
-      };
-      den.ctx.leaf.provides.leaf =
-        { x }:
-        {
-          funny.names = [ "leaf-${x}" ];
-        };
+          }
+        )
+      ];
     };
 
   mkCrossProviders =
     n:
     let
+      targetNames = lib.genList (i: "t${toString i}") n;
       srcMod =
         { den, ... }:
         {
-          den.ctx.src = {
-            _.src =
+          den.policies = lib.listToAttrs (
+            map (tgt: {
+              name = "src-to-${tgt}";
+              value =
+                { v, ... }:
+                let
+                  inherit (den.lib.policy) resolve include;
+                in
+                [
+                  (resolve.to tgt { v = "${v}!"; })
+                  (include (
+                    { v }:
+                    {
+                      funny.names = [ "${tgt}-${v}" ];
+                    }
+                  ))
+                  (include (
+                    { v }:
+                    {
+                      funny.names = [ "cross-${tgt}-${v}" ];
+                    }
+                  ))
+                ];
+            }) targetNames
+          );
+          den.schema.src.includes = [
+            (
               { v }:
               {
                 funny.names = [ "src-${v}" ];
-              };
-            into = lib.genAttrs (lib.genList (i: "t${toString i}") n) (_: { v }: [ { v = "${v}!"; } ]);
-            provides = lib.genAttrs (lib.genList (i: "t${toString i}") n) (
-              name: _:
-              { v }:
-              {
-                funny.names = [ "cross-${name}-${v}" ];
               }
-            );
-          };
+            )
+          ]
+          ++ map (tgt: den.policies."src-to-${tgt}") targetNames;
         };
       targetMods = lib.genList (
         i:
@@ -70,11 +112,7 @@ let
         in
         { den, ... }:
         {
-          den.ctx.${name}.provides.${name} =
-            { v }:
-            {
-              funny.names = [ "${name}-${v}" ];
-            };
+          den.schema.${name}.includes = [ ];
         }
       ) n;
     in
@@ -88,7 +126,7 @@ in
       { den, funnyNames, ... }:
       {
         imports = mkCtxChain 30;
-        expr = builtins.length (funnyNames (den.ctx.c0 { x = "v"; }));
+        expr = builtins.length (funnyNames (den.lib.resolveEntity "c0" { x = "v"; }));
         expected = 30;
       }
     );
@@ -97,7 +135,7 @@ in
       { den, funnyNames, ... }:
       {
         imports = [ (mkFanOut 50) ];
-        expr = builtins.length (funnyNames (den.ctx.root { x = "v"; }));
+        expr = builtins.length (funnyNames (den.lib.resolveEntity "root" { x = "v"; }));
         expected = 51;
       }
     );
@@ -106,7 +144,7 @@ in
       { den, funnyNames, ... }:
       {
         imports = mkCrossProviders 20;
-        expr = builtins.length (funnyNames (den.ctx.src { v = "z"; }));
+        expr = builtins.length (funnyNames (den.lib.resolveEntity "src" { v = "z"; }));
         expected = 41;
       }
     );

@@ -1,70 +1,87 @@
 ---
 title: Documentation Overview
-description: Map of all Den documentation sections.
+description: Find your way through Den's documentation — pick a path based on your background and goals.
 ---
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-## Learn
+Den is an aspect-oriented Nix framework: you write features, not host files. A pure algebraic effects pipeline resolves aspects into NixOS, Darwin, and home-manager configurations automatically. Read more about [why Den exists](/motivation/).
 
-Understand the principles and mechanisms behind Den.
+## Where to start
 
 <CardGrid>
-  <LinkCard title="Core Principles" href="/explanation/core-principles/" description="Dendritic design: features over hosts, aspects over modules." />
-  <LinkCard title="Context System" href="/explanation/context-system/" description="How den.ctx types define data flow between entities." />
-  <LinkCard title="Aspects & Functors" href="/explanation/aspects/" description="The __functor pattern and aspect structure." />
-  <LinkCard title="Parametric Aspects" href="/explanation/parametric/" description="Context-aware function dispatch via argument introspection." />
-  <LinkCard title="Context Pipeline" href="/explanation/context-pipeline/" description="How host/user/home contexts transform into NixOS/Darwin/HM modules." />
-  <LinkCard title="Library vs Framework" href="/explanation/library-vs-framework/" description="Using Den's core lib for any Nix domain." />
+  <Card title="I'm new to Den" icon="rocket">
+    Walk through a complete setup from scratch.\
+    [From Zero to Den](/guides/from-zero-to-den/) | [From Flake to Den](/guides/from-flake-to-den/)
+  </Card>
+  <Card title="I'm coming from NixOS / HM / flake-parts" icon="puzzle">
+    See how Den maps to patterns you already know.\
+    [Coming from...](/explanation/coming-from/)
+  </Card>
+  <Card title="I want to understand the architecture" icon="open-book">
+    Start with principles, then work through the four concerns.\
+    [Core Principles](/explanation/core-principles/) | [Four Concerns](#understand)
+  </Card>
+  <Card title="I learn by example" icon="laptop">
+    Runnable templates covering common setups.\
+    [Templates Overview](/tutorials/overview/) | [CI Tests as Examples](/tutorials/ci/)
+  </Card>
 </CardGrid>
 
-## Cookbook
+## Understand
 
-Practical recipes for common tasks.
+<Card title="The Four Concerns" icon="list-format">
+Den separates configuration into four orthogonal concerns.\
+[Entities](/explanation/entities/) | [Aspects](/explanation/aspects/) | [Policies](/explanation/policies/) | [Quirks & Pipes](/explanation/quirks-and-pipes/)
+</Card>
+
+<CardGrid>
+  <LinkCard title="Core Principles" href="/explanation/core-principles/" description="Features over hosts, aspects over modules, composition over duplication." />
+  <LinkCard title="Resolution Pipeline" href="/explanation/context-pipeline/" description="How entities resolve into NixOS/Darwin/HM configurations." />
+  <LinkCard title="Fleets & Multi-Host" href="/explanation/fleet/" description="Cross-host data flow and fleet topology." />
+  <LinkCard title="Deep Dives" href="/explanation/effects/" description="Algebraic effects, diagrams, scope partitioning." />
+</CardGrid>
+
+## Build
+
+<Card title="Guides" icon="pencil">
+Task-oriented guides for working with Den day to day.
+</Card>
 
 <CardGrid>
   <LinkCard title="Declare Hosts & Users" href="/guides/declare-hosts/" description="den.hosts, den.homes, users, and schema options." />
   <LinkCard title="Configure Aspects" href="/guides/configure-aspects/" description="Owned configs, includes, provides, and defaults." />
-  <LinkCard title="Custom Nix Classes" href="/guides/custom-classes/" description="Create new classes via den.provides.forward." />
   <LinkCard title="Homes Integration" href="/guides/home-manager/" description="Home Manager, hjem, and nix-maid setup." />
   <LinkCard title="Use Batteries" href="/guides/batteries/" description="den.provides.* built-in aspects." />
+  <LinkCard title="Host/User Mutual Config" href="/guides/mutual/" description="Bidirectional config between hosts and users." />
   <LinkCard title="Share with Namespaces" href="/guides/namespaces/" description="Publish and consume aspect libraries across flakes." />
+  <LinkCard title="Custom Nix Classes" href="/guides/custom-classes/" description="Create new classes via den.provides.forward." />
   <LinkCard title="Angle Brackets Syntax" href="/guides/angle-brackets/" description="<aspect/path> shorthand via __findFile." />
-  <LinkCard title="Migrate to Den" href="/guides/migrate/" description="Incremental migration from existing setups." />
-  <LinkCard title="Debug Configurations" href="/guides/debug/" description="REPL inspection, tracing, and troubleshooting." />
-</CardGrid>
-
-## Templates
-
-Step-by-step walkthroughs for each starter template.
-
-<CardGrid>
-  <LinkCard title="Templates Overview" href="/tutorials/overview/" description="Comparison of all available templates." />
-  <LinkCard title="Default" href="/tutorials/default/" description="Recommended: flake-parts + home-manager." />
-  <LinkCard title="Minimal" href="/tutorials/minimal/" description="Minimal flake, no flake-parts." />
-  <LinkCard title="Example" href="/tutorials/example/" description="Cross-platform NixOS + Darwin." />
-  <LinkCard title="No-Flake" href="/tutorials/noflake/" description="npins + lib.evalModules." />
-  <LinkCard title="CI Tests" href="/tutorials/ci/" description="Feature tests as executable code examples." />
-  <LinkCard title="Bug Reproduction" href="/tutorials/bogus/" description="Isolated template for bug reports." />
+  <LinkCard title="Troubleshooting" href="/guides/debug/" description="REPL inspection, tracing, and common pitfalls." />
 </CardGrid>
 
 ## Reference
 
-API documentation for every Den option.
+<Card title="API Documentation" icon="document">
+Option namespaces and library functions.
+</Card>
 
 <CardGrid>
-  <LinkCard title="den.ctx" href="/reference/ctx/" description="Context types, into transformations, provides." />
-  <LinkCard title="den.lib" href="/reference/lib/" description="parametric, canTake, take, statics, owned, __findFile." />
+  <LinkCard title="den.schema" href="/reference/schema/" description="Host, user, and home schema options." />
   <LinkCard title="den.aspects" href="/reference/aspects/" description="Aspect type, resolution, class configs." />
-  <LinkCard title="den.schema" href="/reference/schema/" description="Host, user, home schema options." />
   <LinkCard title="den.provides" href="/reference/batteries/" description="Built-in batteries reference." />
+  <LinkCard title="den.quirks" href="/reference/quirks/" description="Quirk declarations and pipe builder API." />
+  <LinkCard title="den.policies" href="/reference/policies/" description="Policy effects, combinators, and built-in policies." />
+  <LinkCard title="den.ctx (compat)" href="/explanation/context-system/" description="Legacy compatibility shim." />
+  <LinkCard title="den.lib" href="/reference/lib/" description="Core library: parametric dispatch, __findFile." />
+  <LinkCard title="den.lib.diag" href="/reference/diag/" description="Diagram generation and graph introspection." />
   <LinkCard title="flake.*" href="/reference/output/" description="Output generation and instantiation." />
+  <LinkCard title="Glossary" href="/reference/glossary/" description="Definitions for Den-specific terms." />
 </CardGrid>
 
-## Community & Project
+## Community
 
-<CardGrid>
-  <LinkCard title="Community" href="/community/" description="Discussions, real-world examples, ecosystem." />
-  <LinkCard title="Contributing" href="/contributing/" description="Tests, CI, code style." />
-  <LinkCard title="Sponsor" href="/sponsor/" description="Support Den development." />
-</CardGrid>
+<Card title="Get Involved" icon="heart">
+Questions, ideas, or real-world examples — find other Den users and contributors.\
+[Community](/community/) | [Contributors Guide](/contributing/)
+</Card>

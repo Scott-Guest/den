@@ -1,4 +1,4 @@
-{ lib, den, ... }:
+{ lib, ... }:
 let
   description = ''
     Defines a user at OS and Home levels.
@@ -25,6 +25,7 @@ let
   userContext =
     { host, user }:
     {
+      name = "define-user/${user.userName}@${host.name}";
       nixos.users.users.${user.userName} = {
         name = user.userName;
         home = homeDir host user;
@@ -45,10 +46,14 @@ let
     userContext {
       host.system = home.system;
       user.userName = home.userName;
+    }
+    // {
+      name = "define-user/home";
     };
 in
 {
-  den.provides.define-user = den.lib.parametric.exactly {
+  den.provides.define-user = {
+    name = "define-user";
     inherit description;
     includes = [
       userContext

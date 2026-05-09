@@ -1,4 +1,4 @@
-# Tests for context traversal helpers: emitTransitions, emitSelfProvide, dedup.
+# Tests for context traversal helpers: emitAspectPolicies, dedup.
 {
   denTest,
   inputs,
@@ -62,7 +62,7 @@ in
 {
   flake.tests.fx-ctx-apply = {
 
-    # emitSelfProvide: produces include from aspect.provides.${name}.
+    # emitAspectPolicies: produces include from aspect.provides.${name} (self-provide).
     test-self-provide = denTest (
       { den, ... }:
       let
@@ -82,7 +82,7 @@ in
           };
           includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.emitSelfProvide aspect;
+        comp = den.lib.aspects.fx.aspect.emitAspectPolicies aspect;
         result = fx.handle {
           handlers = collectHandlers;
           state = { };
@@ -100,49 +100,11 @@ in
       }
     );
 
-    # emitTransitions: emits into-transition effect.
-    test-into-transition-emits = denTest (
-      { den, ... }:
-      let
-        fx = den.lib.fx;
-        aspect = {
-          name = "host";
-          meta = { };
-          into = ctx: {
-            user = [
-              {
-                user = "tux";
-              }
-            ];
-          };
-          provides = { };
-          includes = [ ];
-        };
-        comp = den.lib.aspects.fx.aspect.emitTransitions aspect;
-        result = fx.handle {
-          handlers = collectHandlers;
-          state = { };
-        } comp;
-      in
-      {
-        expr = {
-          transitionCount = builtins.length (result.state.transitions or [ ]);
-          selfName = (builtins.head result.state.transitions).selfName;
-          hasIntoFn = (builtins.head result.state.transitions).hasIntoFn;
-        };
-        expected = {
-          transitionCount = 1;
-          selfName = "host";
-          hasIntoFn = true;
-        };
-      }
-    );
-
     # Into keys excluded from class emission by structuralKeys.
     test-into-not-class = denTest (
       { den, ... }:
       let
-        fx = den.lib.fx;
+        pipeline = den.lib.aspects.fx.pipeline;
         aspect = {
           name = "host";
           meta = { };
@@ -152,21 +114,20 @@ in
           };
           includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
-        result = fx.handle {
-          handlers = collectHandlers // {
-            "emit-class" =
-              { param, state }:
-              {
-                resume = null;
-                state = state // {
-                  classes = (state.classes or [ ]) ++ [ param ];
-                };
-              };
-          };
-          state = { };
-        } comp;
-        classNames = map (c: c.class) (result.state.classes or [ ]);
+        result = pipeline.fxFullResolve {
+          class = "nixos";
+          self = aspect;
+          ctx = { };
+        };
+        scoped = result.state.scopedClassImports null;
+        flat = builtins.foldl' (
+          acc: sd:
+          lib.zipAttrsWith (_: builtins.concatLists) [
+            acc
+            sd
+          ]
+        ) { } (builtins.attrValues scoped);
+        classNames = builtins.attrNames flat;
       in
       {
         expr = classNames;
@@ -174,7 +135,7 @@ in
       }
     );
 
-    # emitSelfProvide returns empty when no matching provide.
+    # emitAspectPolicies returns empty when no matching provide.
     test-self-provide-absent = denTest (
       { den, ... }:
       let
@@ -185,29 +146,7 @@ in
           provides = { };
           includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.emitSelfProvide aspect;
-        result = fx.handle {
-          handlers = collectHandlers;
-          state = { };
-        } comp;
-      in
-      {
-        expr = result.value;
-        expected = [ ];
-      }
-    );
-
-    # emitTransitions returns empty when no into.
-    test-no-transitions = denTest (
-      { den, ... }:
-      let
-        fx = den.lib.fx;
-        aspect = {
-          name = "host";
-          meta = { };
-          includes = [ ];
-        };
-        comp = den.lib.aspects.fx.aspect.emitTransitions aspect;
+        comp = den.lib.aspects.fx.aspect.emitAspectPolicies aspect;
         result = fx.handle {
           handlers = collectHandlers;
           state = { };
@@ -223,15 +162,14 @@ in
     test-functor-preserves-into = denTest (
       { den, ... }:
       let
-        fx = den.lib.fx;
+        pipeline = den.lib.aspects.fx.pipeline;
         aspect = {
           name = "host";
           meta = { };
           into = ctx: {
             user = [ { user = "tux"; } ];
           };
-          __functor =
-            self:
+          __fn =
             { host }:
             {
               nixos = {
@@ -239,28 +177,23 @@ in
               };
               includes = [ ];
             };
-          __functionArgs = {
+          __args = {
             host = false;
           };
-          includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
-        result = fx.handle {
-          handlers = collectHandlers // {
-            host =
-              { param, state }:
-              {
-                resume = "igloo";
-                inherit state;
-              };
+        result = pipeline.fxFullResolve {
+          class = "nixos";
+          self = aspect;
+          ctx = {
+            host = "igloo";
           };
-          state = { };
-        } comp;
+        };
+        resolved = builtins.head result.value;
       in
       {
         # Verify into is preserved through functor resolution
         # (the resolved aspect still has into, visible via structural attrs)
-        expr = result.value ? into;
+        expr = resolved ? into;
         expected = true;
       }
     );
@@ -284,18 +217,21 @@ in
           handlers."ctx-seen" =
             { param, state }:
             let
-              isFirst = !((state.seen or { }) ? ${param});
+              isFirst = !(((state.seen or (_: { })) null) ? ${param});
             in
             {
               resume = { inherit isFirst; };
               state = state // {
-                seen = (state.seen or { }) // {
-                  ${param} = true;
-                };
+                seen =
+                  _:
+                  ((state.seen or (_: { })) null)
+                  // {
+                    ${param} = true;
+                  };
               };
             };
           state = {
-            seen = { };
+            seen = _: { };
           };
         } comp;
       in

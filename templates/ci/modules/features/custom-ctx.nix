@@ -10,21 +10,31 @@
         ...
       }:
       {
-        den.ctx.greeting.description = "{hello} context";
-        den.ctx.greeting.provides.greeting =
-          { hello }:
-          {
-            funny.names = [ hello ];
-          };
-        den.ctx.greeting.into.shout = { hello }: [ { shout = lib.toUpper hello; } ];
-
-        den.ctx.shout.provides.shout =
-          { shout }:
-          {
-            funny.names = [ shout ];
-          };
-
-        expr = funnyNames (den.ctx.greeting { hello = "world"; });
+        den.schema.shout.includes = [ ];
+        den.policies.test-greeting-to-shout =
+          { hello, ... }:
+          let
+            inherit (den.lib.policy) resolve include;
+          in
+          [
+            (resolve.to "shout" { shout = lib.toUpper hello; })
+            (include (
+              { shout }:
+              {
+                funny.names = [ shout ];
+              }
+            ))
+          ];
+        den.schema.greeting.includes = [
+          (
+            { hello }:
+            {
+              funny.names = [ hello ];
+            }
+          )
+          den.policies.test-greeting-to-shout
+        ];
+        expr = funnyNames (den.lib.resolveEntity "greeting" { hello = "world"; });
         expected = [
           "WORLD"
           "world"
@@ -35,13 +45,13 @@
     test-ctx-includes-static-and-parametric = denTest (
       { den, funnyNames, ... }:
       {
-        den.ctx.foo.description = "{foo} context";
-        den.ctx.foo.provides.foo =
-          { foo }:
-          {
-            funny.names = [ foo ];
-          };
-        den.ctx.foo.includes = [
+        den.schema.foo.includes = [
+          (
+            { foo }:
+            {
+              funny.names = [ foo ];
+            }
+          )
           { funny.names = [ "static-include" ]; }
           (
             { foo, ... }:
@@ -51,7 +61,7 @@
           )
         ];
 
-        expr = funnyNames (den.ctx.foo { foo = "hello"; });
+        expr = funnyNames (den.lib.resolveEntity "foo" { foo = "hello"; });
         expected = [
           "hello"
           "param-hello"
@@ -63,15 +73,17 @@
     test-ctx-owned = denTest (
       { den, funnyNames, ... }:
       {
-        den.ctx.bar.description = "{x} context";
-        den.ctx.bar.provides.bar =
-          { x }:
-          {
-            funny.names = [ x ];
-          };
-        den.ctx.bar.funny.names = [ "owned" ];
+        den.schema.bar.includes = [
+          (
+            { x }:
+            {
+              funny.names = [ x ];
+            }
+          )
+          { funny.names = [ "owned" ]; }
+        ];
 
-        expr = funnyNames (den.ctx.bar { x = "val"; });
+        expr = funnyNames (den.lib.resolveEntity "bar" { x = "val"; });
         expected = [
           "owned"
           "val"

@@ -20,7 +20,11 @@
           };
           includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+        comp = fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -31,9 +35,9 @@
       in
       {
         expr = {
-          name = result.value.name;
-          hasNixos = result.value ? nixos;
-          includes = result.value.includes;
+          name = (builtins.head result.value).name;
+          hasNixos = (builtins.head result.value) ? nixos;
+          includes = (builtins.head result.value).includes;
         };
         expected = {
           name = "base";
@@ -51,18 +55,20 @@
         aspect = {
           name = "web";
           meta = { };
-          __functor =
-            _:
+          __fn =
             { host }:
             {
               nixos.networking.hostName = host;
             };
-          __functionArgs = {
+          __args = {
             host = false;
           };
-          includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+        comp = fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -74,7 +80,7 @@
         } comp;
       in
       {
-        expr = result.value.nixos.networking.hostName;
+        expr = (builtins.head result.value).nixos.networking.hostName;
         expected = "igloo";
       }
     );
@@ -87,16 +93,14 @@
         child = {
           name = "child";
           meta = { };
-          __functor =
-            _:
+          __fn =
             { host }:
             {
               nixos.networking.hostName = host;
             };
-          __functionArgs = {
+          __args = {
             host = false;
           };
-          includes = [ ];
         };
         parent = {
           name = "parent";
@@ -104,7 +108,11 @@
           nixos = { };
           includes = [ child ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -116,7 +124,7 @@
         } comp;
       in
       {
-        expr = (builtins.head result.value.includes).nixos.networking.hostName;
+        expr = (builtins.head (builtins.head result.value).includes).nixos.networking.hostName;
         expected = "igloo";
       }
     );
@@ -137,18 +145,20 @@
         parent = {
           name = "dev";
           meta = { };
-          __functor =
-            _:
+          __fn =
             { user }:
             {
               includes = [ staticChild ];
             };
-          __functionArgs = {
+          __args = {
             user = false;
           };
-          includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -158,7 +168,7 @@
           };
           state = den.lib.aspects.fx.pipeline.defaultState;
         } comp;
-        childResult = builtins.head result.value.includes;
+        childResult = builtins.head (builtins.head result.value).includes;
       in
       {
         expr = childResult.nixos.programs.git.enable;
@@ -179,15 +189,20 @@
           };
           includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+        comp = fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
+        };
         result =
-          (fx.handle {
-            handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
-              class = "nixos";
-              ctx = { };
-            };
-            state = den.lib.aspects.fx.pipeline.defaultState;
-          } comp).value;
+          builtins.head
+            (fx.handle {
+              handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
+                class = "nixos";
+                ctx = { };
+              };
+              state = den.lib.aspects.fx.pipeline.defaultState;
+            } comp).value;
       in
       {
         expr = {
@@ -209,7 +224,7 @@
       }
     );
 
-    # Parametric aspect: __functor and __functionArgs are NOT in resolved output.
+    # Parametric aspect: __fn and __args are NOT in resolved output.
     test-owned-stripping-parametric = denTest (
       { den, ... }:
       let
@@ -217,41 +232,44 @@
         aspect = {
           name = "test";
           meta = { };
-          __functor =
-            _:
+          __fn =
             { host }:
             {
               nixos = {
                 hostName = host;
               };
             };
-          __functionArgs = {
+          __args = {
             host = false;
           };
-          includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+        comp = fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
+        };
         result =
-          (fx.handle {
-            handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
-              class = "nixos";
-              ctx = {
-                host = "igloo";
+          builtins.head
+            (fx.handle {
+              handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
+                class = "nixos";
+                ctx = {
+                  host = "igloo";
+                };
               };
-            };
-            state = den.lib.aspects.fx.pipeline.defaultState;
-          } comp).value;
+              state = den.lib.aspects.fx.pipeline.defaultState;
+            } comp).value;
       in
       {
         expr = {
-          hasFunctor = result ? __functor;
-          hasFunctionArgs = result ? __functionArgs;
+          hasFn = result ? __fn;
+          hasArgs = result ? __args;
           hasNixos = result ? nixos;
           hasName = result ? name;
         };
         expected = {
-          hasFunctor = false;
-          hasFunctionArgs = false;
+          hasFn = false;
+          hasArgs = false;
           hasNixos = true;
           hasName = true;
         };
@@ -274,18 +292,16 @@
         parametricChild = {
           name = "param-child";
           meta = { };
-          __functor =
-            _:
+          __fn =
             { host }:
             {
               nixos = {
                 hostName = host;
               };
             };
-          __functionArgs = {
+          __args = {
             host = false;
           };
-          includes = [ ];
         };
         parent = {
           name = "parent";
@@ -295,7 +311,11 @@
             parametricChild
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -305,7 +325,7 @@
           };
           state = den.lib.aspects.fx.pipeline.defaultState;
         } comp;
-        children = result.value.includes;
+        children = (builtins.head result.value).includes;
       in
       {
         expr = {
@@ -327,39 +347,47 @@
         aspect = {
           name = "web";
           meta = { };
-          __functor =
-            _:
+          __fn =
             { host }:
             {
               nixos.networking.hostName = host;
             };
-          __functionArgs = {
+          __args = {
             host = false;
           };
-          includes = [ ];
         };
         ctx = {
           host = "igloo";
         };
-        comp1 = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+        comp1 = fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
+        };
         result1 =
-          (fx.handle {
-            handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
-              class = "nixos";
-              inherit ctx;
-            };
-            state = den.lib.aspects.fx.pipeline.defaultState;
-          } comp1).value;
+          builtins.head
+            (fx.handle {
+              handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
+                class = "nixos";
+                inherit ctx;
+              };
+              state = den.lib.aspects.fx.pipeline.defaultState;
+            } comp1).value;
 
-        comp2 = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+        comp2 = fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
+        };
         result2 =
-          (fx.handle {
-            handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
-              class = "nixos";
-              inherit ctx;
-            };
-            state = den.lib.aspects.fx.pipeline.defaultState;
-          } comp2).value;
+          builtins.head
+            (fx.handle {
+              handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
+                class = "nixos";
+                inherit ctx;
+              };
+              state = den.lib.aspects.fx.pipeline.defaultState;
+            } comp2).value;
       in
       {
         expr = result1.nixos.networking.hostName == result2.nixos.networking.hostName;
@@ -375,31 +403,34 @@
         aspect = {
           name = "multi";
           meta = { };
-          __functor =
-            _:
+          __fn =
             { host, user }:
             {
               nixos.networking.hostName = host;
               home.username = user;
             };
-          __functionArgs = {
+          __args = {
             host = false;
             user = false;
           };
-          includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+        comp = fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
+        };
         result =
-          (fx.handle {
-            handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
-              class = "nixos";
-              ctx = {
-                host = "igloo";
-                user = "tux";
+          builtins.head
+            (fx.handle {
+              handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
+                class = "nixos";
+                ctx = {
+                  host = "igloo";
+                  user = "tux";
+                };
               };
-            };
-            state = den.lib.aspects.fx.pipeline.defaultState;
-          } comp).value;
+              state = den.lib.aspects.fx.pipeline.defaultState;
+            } comp).value;
       in
       {
         expr = {
@@ -413,33 +444,29 @@
       }
     );
 
-    # Missing required arg produces readable error.
-    test-missing-arg-throws = denTest (
+    # Missing required arg defers the aspect (returns empty resolution).
+    test-missing-arg-defers = denTest (
       { den, ... }:
       let
         fx = den.lib.fx;
         aspect = {
           name = "broken";
           meta = { };
-          __functor =
-            _:
+          __fn =
             { host }:
             {
               nixos.networking.hostName = host;
             };
-          __functionArgs = {
+          __args = {
             host = false;
           };
-          includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
-      in
-      {
-        expectedError = {
-          type = "ThrownError";
-          msg = "host";
+        comp = fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
         };
-        expr = fx.handle {
+        result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
             ctx = {
@@ -448,6 +475,10 @@
           };
           state = den.lib.aspects.fx.pipeline.defaultState;
         } comp;
+      in
+      {
+        expr = result.value;
+        expected = [ ];
       }
     );
 
@@ -464,15 +495,20 @@
           };
           includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+        comp = fx.send "resolve" {
+          inherit aspect;
+          identity = den.lib.aspects.fx.identity.key aspect;
+          ctx = { };
+        };
         result =
-          (fx.handle {
-            handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
-              class = "nixos";
-              ctx = { };
-            };
-            state = den.lib.aspects.fx.pipeline.defaultState;
-          } comp).value;
+          builtins.head
+            (fx.handle {
+              handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
+                class = "nixos";
+                ctx = { };
+              };
+              state = den.lib.aspects.fx.pipeline.defaultState;
+            } comp).value;
       in
       {
         expr = result.nixos.enable;

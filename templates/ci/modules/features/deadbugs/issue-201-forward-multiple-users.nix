@@ -11,19 +11,28 @@
         igloo,
         ...
       }:
+      let
+        inherit (den.lib.policy) include;
+      in
       {
         den.default.homeManager.home.stateVersion = "25.11";
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
 
         den.hosts.x86_64-linux.igloo.users = {
           tux = { };
           pingu = { };
         };
 
-        den.aspects.igloo.provides.to-users.includes = [
-          den.provides.define-user
-          den.aspects.set-user-desc
-        ];
+        den.aspects.igloo.policies.to-users =
+          { host, user, ... }:
+          [
+            (include {
+              includes = [
+                den.provides.define-user
+                den.aspects.set-user-desc
+              ];
+            })
+          ];
+        den.aspects.igloo.includes = [ den.aspects.igloo.policies.to-users ];
         den.aspects.tux.includes = [ den.provides.primary-user ];
 
         den.aspects.set-user-desc =

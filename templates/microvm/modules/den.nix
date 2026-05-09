@@ -17,5 +17,5 @@
   #
 
   # automatically set hostname on all hosts.
-  den.ctx.host.includes = [ den.provides.hostname ];
+  den.schema.host.includes = [ den.provides.hostname ];
 }

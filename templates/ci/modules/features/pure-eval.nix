@@ -41,25 +41,45 @@ in
 
     test-pure-ctx-chain =
       let
+        aIncludes = [
+          (
+            { v }:
+            {
+              my.val = [ v ];
+            }
+          )
+        ];
         ev = evalPure (
           { den, ... }:
           {
-            den.ctx.a = {
-              _.a =
-                { v }:
-                {
-                  my.val = [ v ];
-                };
-              into.b = { v }: [ { v = "${v}!"; } ];
-            };
-            den.ctx.b.provides.b =
-              { v }:
+            den.policies.a-to-b =
               {
-                my.val = [ v ];
-              };
+                __entityKind ? null,
+                ...
+              }@ctx:
+              let
+                inherit (den.lib.policy) resolve include;
+              in
+              if __entityKind != "a" then
+                [ ]
+              else if ctx ? v then
+                [
+                  (resolve.to "b" { v = "${ctx.v}!"; })
+                  (include (
+                    { v }:
+                    {
+                      my.val = [ v ];
+                    }
+                  ))
+                ]
+              else
+                [ ];
           }
         );
-        asp = ev.config.den.ctx.a { v = "x"; };
+        entity = ev.config.den.lib.resolveEntity "a" { v = "x"; };
+        asp = entity // {
+          includes = entity.includes ++ [ ev.config.den.policies.a-to-b ] ++ aIncludes;
+        };
         mod = ev.config.den.lib.aspects.resolve "my" asp;
         ev2 = lib.evalModules {
           modules = [

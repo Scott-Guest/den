@@ -81,7 +81,10 @@
         result = fx.handle {
           handlers = den.lib.aspects.fx.handlers.constraintRegistryHandler;
           state = {
-            constraintRegistry = { };
+            currentScope = "__test";
+            scopedConstraintRegistry = _: { };
+            scopedConstraintFilters = _: { };
+            scopedIncludesChain = _: { };
           };
         } comp;
       in
@@ -99,7 +102,10 @@
         result = fx.handle {
           handlers = den.lib.aspects.fx.handlers.constraintRegistryHandler;
           state = {
-            constraintRegistry = { };
+            currentScope = "__test";
+            scopedConstraintRegistry = _: { };
+            scopedConstraintFilters = _: { };
+            scopedIncludesChain = _: { };
           };
         } comp;
       in
@@ -133,7 +139,10 @@
         result = fx.handle {
           handlers = den.lib.aspects.fx.handlers.constraintRegistryHandler;
           state = {
-            constraintRegistry = { };
+            currentScope = "__test";
+            scopedConstraintRegistry = _: { };
+            scopedConstraintFilters = _: { };
+            scopedIncludesChain = _: { };
           };
         } comp;
       in
@@ -173,7 +182,11 @@
             }
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -183,7 +196,15 @@
         } comp;
       in
       {
-        expr = builtins.length (result.state.imports null);
+        expr = builtins.length (
+          (builtins.foldl' (
+            acc: sd:
+            lib.zipAttrsWith (_: builtins.concatLists) [
+              acc
+              sd
+            ]
+          ) { } (builtins.attrValues (result.state.scopedClassImports null))).nixos or [ ]
+        );
         expected = 1;
       }
     );
@@ -220,7 +241,11 @@
             }
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -230,8 +255,8 @@
         } comp;
       in
       {
-        # root + keep = 2 paths, drop is tombstoned and excluded from paths
-        expr = builtins.length result.state.paths;
+        # root + keep = 2 paths in pathSet, drop is tombstoned and excluded
+        expr = builtins.length (builtins.attrNames ((result.state.pathSet) null));
         expected = 2;
       }
     );
@@ -362,9 +387,10 @@
           handlers =
             den.lib.aspects.fx.handlers.chainHandler // den.lib.aspects.fx.handlers.constraintRegistryHandler;
           state = {
-            includesChain = [ ];
-            constraintRegistry = { };
-            constraintFilters = [ ];
+            currentScope = "__test";
+            scopedIncludesChain = _: { };
+            scopedConstraintRegistry = _: { };
+            scopedConstraintFilters = _: { };
           };
         } comp;
       in
@@ -403,9 +429,10 @@
           handlers =
             den.lib.aspects.fx.handlers.chainHandler // den.lib.aspects.fx.handlers.constraintRegistryHandler;
           state = {
-            includesChain = [ ];
-            constraintRegistry = { };
-            constraintFilters = [ ];
+            currentScope = "__test";
+            scopedIncludesChain = _: { };
+            scopedConstraintRegistry = _: { };
+            scopedConstraintFilters = _: { };
           };
         } comp;
       in
@@ -444,9 +471,10 @@
           handlers =
             den.lib.aspects.fx.handlers.chainHandler // den.lib.aspects.fx.handlers.constraintRegistryHandler;
           state = {
-            includesChain = [ ];
-            constraintRegistry = { };
-            constraintFilters = [ ];
+            currentScope = "__test";
+            scopedIncludesChain = _: { };
+            scopedConstraintRegistry = _: { };
+            scopedConstraintFilters = _: { };
           };
         } comp;
       in
@@ -479,9 +507,10 @@
           handlers =
             den.lib.aspects.fx.handlers.chainHandler // den.lib.aspects.fx.handlers.constraintRegistryHandler;
           state = {
-            includesChain = [ ];
-            constraintRegistry = { };
-            constraintFilters = [ ];
+            currentScope = "__test";
+            scopedIncludesChain = _: { };
+            scopedConstraintRegistry = _: { };
+            scopedConstraintFilters = _: { };
           };
         } comp;
       in
@@ -520,9 +549,10 @@
           handlers =
             den.lib.aspects.fx.handlers.chainHandler // den.lib.aspects.fx.handlers.constraintRegistryHandler;
           state = {
-            includesChain = [ ];
-            constraintRegistry = { };
-            constraintFilters = [ ];
+            currentScope = "__test";
+            scopedIncludesChain = _: { };
+            scopedConstraintRegistry = _: { };
+            scopedConstraintFilters = _: { };
           };
         } comp;
       in
@@ -571,7 +601,11 @@
             }
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -581,12 +615,20 @@
         } comp;
       in
       {
-        expr = builtins.length (result.state.imports null);
+        expr = builtins.length (
+          (builtins.foldl' (
+            acc: sd:
+            lib.zipAttrsWith (_: builtins.concatLists) [
+              acc
+              sd
+            ]
+          ) { } (builtins.attrValues (result.state.scopedClassImports null))).nixos or [ ]
+        );
         expected = 1;
       }
     );
 
-    # meta.excludes sugar: exclude via list of refs
+    # excludes: exclude via list of refs
     test-excludes-sugar = denTest (
       { den, ... }:
       let
@@ -597,9 +639,8 @@
         };
         parent = {
           name = "root";
-          meta = {
-            excludes = [ target ];
-          };
+          meta = { };
+          excludes = [ target ];
           includes = [
             {
               name = "keep";
@@ -613,7 +654,11 @@
             }
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers =
             den.lib.aspects.fx.pipeline.composeHandlers
@@ -681,7 +726,11 @@
             }
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers =
             den.lib.aspects.fx.pipeline.composeHandlers

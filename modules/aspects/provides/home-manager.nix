@@ -1,6 +1,5 @@
 {
   den,
-  lib,
   inputs,
   ...
 }:
@@ -21,13 +20,10 @@ let
       ];
   };
 
-  homeCtx = {
-    home.provides.home = { home }: den.lib.parametric.fixedTo { inherit home; } home.aspect;
-    home.into.default = lib.singleton;
-  };
-
 in
 {
-  den.ctx = result.ctx // homeCtx;
   den.schema.host.imports = [ result.hostConf ];
+  den.schema.host.includes = [ result.battery ];
+
+  den.classes.homeManager.description = "Home Manager user environment";
 }

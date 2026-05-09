@@ -1,6 +1,15 @@
-{ inputs, config, ... }:
+{
+  den,
+  inputs,
+  config,
+  ...
+}:
+let
+  inherit (den.lib.policy) route;
+in
 {
   imports = [ inputs.nix-unit.modules.flake.default ];
+  den.classes.tests = { };
 
   # some globals
   perSystem.nix-unit = {
@@ -8,10 +17,12 @@
     inputs = inputs;
   };
 
-  den.ctx.flake-parts.into.flake-parts-system = _: [
-    {
-      fromClass = _: "tests";
-      intoPath = _: [
+  den.policies.to-flake-parts-system-tests = _: [
+    (route {
+      fromClass = "tests";
+      intoClass = "flake-parts";
+      collectSubtree = true;
+      path = [
         "nix-unit"
         "tests"
       ];
@@ -23,6 +34,7 @@
           tux = igloo.users.users.tux;
         in
         args.config.allModuleArgs // { inherit igloo tux; };
-    }
+    })
   ];
+  den.schema.flake-parts.includes = [ den.policies.to-flake-parts-system-tests ];
 }

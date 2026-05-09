@@ -32,18 +32,28 @@
     test-host-owned-mutual = denTest (
       {
         den,
+        lib,
         tuxHm,
         pinguHm,
         ...
       }:
+      let
+        inherit (den.lib.policy) include;
+      in
       {
         den.hosts.x86_64-linux.igloo.users = {
           tux = { };
           pingu = { };
         };
 
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
-        den.aspects.igloo.provides.to-users.homeManager.programs.direnv.enable = true;
+        den.aspects.igloo.policies.to-users =
+          { host, user, ... }:
+          [
+            (include {
+              homeManager.programs.direnv.enable = true;
+            })
+          ];
+        den.aspects.igloo.includes = [ den.aspects.igloo.policies.to-users ];
 
         expr = [
           tuxHm.programs.direnv.enable
@@ -59,23 +69,32 @@
     test-host-mutual-static-includes-configures-all-users = denTest (
       {
         den,
+        lib,
         tuxHm,
         pinguHm,
         ...
       }:
+      let
+        inherit (den.lib.policy) include;
+      in
       {
         den.hosts.x86_64-linux.igloo.users = {
           tux = { };
           pingu = { };
         };
 
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
-
-        den.aspects.igloo.provides.to-users.includes = [
-          {
-            homeManager.programs.direnv.enable = true;
-          }
-        ];
+        den.aspects.igloo.policies.to-users =
+          { host, user, ... }:
+          [
+            (include {
+              includes = [
+                {
+                  homeManager.programs.direnv.enable = true;
+                }
+              ];
+            })
+          ];
+        den.aspects.igloo.includes = [ den.aspects.igloo.policies.to-users ];
 
         expr = [
           tuxHm.programs.direnv.enable
@@ -115,9 +134,11 @@
           tuxHm.programs.direnv.enable
           pinguHm.programs.direnv.enable
         ];
+        # { host, user } parametric includes resolve once per user
+        # when both args are available (fan-out via deferred drain).
         expected = [
-          false
-          false
+          true
+          true
         ];
       }
     );
@@ -125,10 +146,14 @@
     test-host-parametric-mutual = denTest (
       {
         den,
+        lib,
         tuxHm,
         pinguHm,
         ...
       }:
+      let
+        inherit (den.lib.policy) include;
+      in
       {
 
         den.hosts.x86_64-linux.igloo.users = {
@@ -136,16 +161,21 @@
           pingu = { };
         };
 
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
-
-        den.aspects.igloo.provides.to-users.includes = [
-          (
-            { host, user }:
-            {
-              homeManager.programs.direnv.enable = true;
-            }
-          )
-        ];
+        den.aspects.igloo.policies.to-users =
+          { host, user, ... }:
+          [
+            (include {
+              includes = [
+                (
+                  { host, user }:
+                  {
+                    homeManager.programs.direnv.enable = true;
+                  }
+                )
+              ];
+            })
+          ];
+        den.aspects.igloo.includes = [ den.aspects.igloo.policies.to-users ];
 
         expr = [
           tuxHm.programs.direnv.enable
@@ -251,9 +281,10 @@
         igloo,
         ...
       }:
+      let
+        inherit (den.lib.policy) include;
+      in
       {
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
-
         den.hosts.x86_64-linux.igloo.users = {
           tux = { };
           alice = { };
@@ -261,15 +292,21 @@
           carl = { };
         };
 
-        den.aspects.tux.provides.to-users =
-          { user, ... }:
-          {
+        den.aspects.tux.policies.to-users =
+          { host, user, ... }:
+          lib.optional (user.name != "tux") (include {
             homeManager.programs.vim.enable = true;
-          };
+          });
 
-        den.aspects.tux.provides.alice = {
-          homeManager.programs.tmux.enable = true;
-        };
+        den.aspects.tux.policies.to-alice =
+          { host, user, ... }:
+          lib.optional (user.name == "alice") (include {
+            homeManager.programs.tmux.enable = true;
+          });
+        den.aspects.tux.includes = [
+          den.aspects.tux.policies.to-users
+          den.aspects.tux.policies.to-alice
+        ];
 
         expr = with igloo.home-manager.users; {
           tux = tux.programs.vim.enable;

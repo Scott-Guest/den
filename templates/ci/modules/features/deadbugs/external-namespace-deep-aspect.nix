@@ -4,7 +4,7 @@
   flake.tests.deadbugs-namespace-deep-aspect = {
 
     test-tools-has-underscore = denTest (
-      { provider, ... }:
+      { den, provider, ... }:
       {
         imports = [
           (inputs.den.namespace "provider" [
@@ -74,10 +74,14 @@
     test-functor-exactly-fires-only-in-user-context = denTest (
       {
         den,
+        lib,
         provider,
         igloo,
         ...
       }:
+      let
+        inherit (den.lib.policy) include;
+      in
       {
         imports = [
           (inputs.den.namespace "provider" [
@@ -86,8 +90,14 @@
           ])
         ];
         den.hosts.x86_64-linux.igloo.users.tux = { };
-        den.aspects.igloo.provides.to-users.includes = [ provider.tools.provides.dev.provides.user-stamp ];
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
+        den.aspects.igloo.policies.to-users =
+          { host, user, ... }:
+          [
+            (include {
+              includes = [ provider.tools.provides.dev.provides.user-stamp ];
+            })
+          ];
+        den.aspects.igloo.includes = [ den.aspects.igloo.policies.to-users ];
         expr = igloo.users.users.tux.description;
         expected = "user-of-igloo";
       }

@@ -46,7 +46,9 @@
         den.homes.x86_64-linux.tux = { };
         den.default.homeManager.home.stateVersion = "25.11";
         den.default.includes = [ den.provides.define-user ];
-        den.ctx.home.homeManager.programs.vim.enable = true;
+        den.schema.home.includes = [
+          { homeManager.programs.vim.enable = true; }
+        ];
 
         expr = config.flake.homeConfigurations.tux.config.programs.vim.enable;
         expected = true;
@@ -60,27 +62,33 @@
         config,
         ...
       }:
+      let
+        inherit (den.lib.policy) include;
+      in
       {
         den.homes.x86_64-linux."tux@igloo" = { };
-
-        den.aspects.tux.includes = [ den.provides.define-user ];
 
         den.aspects.tux.homeManager = args: {
           home.keyboard.model = if args ? osConfig then "os-bound" else "standalone";
         };
 
-        den.ctx.home.includes = [ den.provides.mutual-provider ];
-        den.aspects.tux.provides.igloo = {
-          homeManager.home.keyboard.layout = "enthium";
-          includes = [
-            (den.lib.perHome (
-              { home }:
-              {
-                homeManager.home.keyboard.variant = home.name;
-              }
-            ))
-          ];
-        };
+        den.aspects.tux.policies.to-igloo =
+          { home, ... }:
+          lib.optional (home.hostName == "igloo") (include {
+            homeManager.home.keyboard.layout = "enthium";
+            includes = [
+              (den.lib.perHome (
+                { home }:
+                {
+                  homeManager.home.keyboard.variant = home.name;
+                }
+              ))
+            ];
+          });
+        den.aspects.tux.includes = [
+          den.provides.define-user
+          den.aspects.tux.policies.to-igloo
+        ];
 
         expr = {
           homeSchema = {

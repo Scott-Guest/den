@@ -67,7 +67,15 @@
 
     # Explicit parametric.exactly on a helper must NOT be overridden.
     test-explicit-exactly-not-overridden-by-default = denTest (
-      { den, igloo, ... }:
+      {
+        den,
+        lib,
+        igloo,
+        ...
+      }:
+      let
+        inherit (den.lib.policy) include;
+      in
       {
         den.hosts.x86_64-linux.igloo.users.tux = { };
 
@@ -82,8 +90,14 @@
           ];
         };
 
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
-        den.aspects.igloo.provides.to-users.includes = [ den.aspects.strict-helper ];
+        den.aspects.igloo.policies.to-users =
+          { host, user, ... }:
+          [
+            (include {
+              includes = [ den.aspects.strict-helper ];
+            })
+          ];
+        den.aspects.igloo.includes = [ den.aspects.igloo.policies.to-users ];
 
         # strict-helper requires exactly { host, user } — since ctx.host only provides
         # { host }, strict-helper is skipped at host level (by exactly semantics).
@@ -110,9 +124,16 @@
     );
 
     test-second-level-helper-owned-config-preserved = denTest (
-      { den, igloo, ... }:
       {
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
+        den,
+        lib,
+        igloo,
+        ...
+      }:
+      let
+        inherit (den.lib.policy) include;
+      in
+      {
         den.hosts.x86_64-linux.igloo.users.tux = { };
 
         den.aspects.second-with-owned = {
@@ -127,7 +148,14 @@
           ];
         };
         den.aspects.helper.includes = [ den.aspects.second-with-owned ];
-        den.aspects.igloo.provides.to-users.includes = [ den.aspects.helper ];
+        den.aspects.igloo.policies.to-users =
+          { host, user, ... }:
+          [
+            (include {
+              includes = [ den.aspects.helper ];
+            })
+          ];
+        den.aspects.igloo.includes = [ den.aspects.igloo.policies.to-users ];
 
         expr = [
           igloo.networking.hostName
@@ -141,9 +169,16 @@
     );
 
     test-second-provides-helper-owned-config-preserved = denTest (
-      { den, igloo, ... }:
       {
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
+        den,
+        lib,
+        igloo,
+        ...
+      }:
+      let
+        inherit (den.lib.policy) include;
+      in
+      {
         den.hosts.x86_64-linux.igloo.users.tux = { };
 
         den.aspects.second.provides.with-owned = {
@@ -158,7 +193,14 @@
           ];
         };
         den.aspects.helper.includes = [ den.aspects.second.provides.with-owned ];
-        den.aspects.igloo.provides.to-users.includes = [ den.aspects.helper ];
+        den.aspects.igloo.policies.to-users =
+          { host, user, ... }:
+          [
+            (include {
+              includes = [ den.aspects.helper ];
+            })
+          ];
+        den.aspects.igloo.includes = [ den.aspects.igloo.policies.to-users ];
 
         expr = [
           igloo.networking.hostName

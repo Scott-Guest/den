@@ -15,7 +15,11 @@ let
     aspect:
     let
       fx = den.lib.fx;
-      comp = den.lib.aspects.fx.aspect.aspectToEffect aspect;
+      comp = fx.send "resolve" {
+        inherit aspect;
+        identity = den.lib.aspects.fx.identity.key aspect;
+        ctx = { };
+      };
     in
     fx.handle {
       handlers = den.lib.aspects.fx.pipeline.defaultHandlers { inherit ctx class; };
@@ -57,7 +61,15 @@ in
         result = runPipeline den { } root;
       in
       {
-        expr = builtins.length (result.state.imports null);
+        expr = builtins.length (
+          (builtins.foldl' (
+            acc: sd:
+            lib.zipAttrsWith (_: builtins.concatLists) [
+              acc
+              sd
+            ]
+          ) { } (builtins.attrValues (result.state.scopedClassImports null))).nixos or [ ]
+        );
         expected = 3; # root + child1 + child2 (emit-class fires for each)
       }
     );
@@ -103,7 +115,15 @@ in
         result = runPipeline den { } root;
       in
       {
-        expr = builtins.length (result.state.imports null);
+        expr = builtins.length (
+          (builtins.foldl' (
+            acc: sd:
+            lib.zipAttrsWith (_: builtins.concatLists) [
+              acc
+              sd
+            ]
+          ) { } (builtins.attrValues (result.state.scopedClassImports null))).nixos or [ ]
+        );
         expected = 1;
       }
     );
@@ -147,14 +167,22 @@ in
           ];
         };
         result = runPipeline den { } root;
-        tree = result.value;
+        tree = builtins.head result.value;
         children = tree.includes or [ ];
         names = map (c: c.name or "?") children;
       in
       {
         # Tombstone (~old) + replacement (new) both in tree, only new's module collected.
         expr = {
-          importCount = builtins.length (result.state.imports null);
+          importCount = builtins.length (
+            (builtins.foldl' (
+              acc: sd:
+              lib.zipAttrsWith (_: builtins.concatLists) [
+                acc
+                sd
+              ]
+            ) { } (builtins.attrValues (result.state.scopedClassImports null))).nixos or [ ]
+          );
           hasTombstone = builtins.any (n: n == "~old") names;
           hasReplacement = builtins.any (n: n == "new") names;
         };
@@ -198,7 +226,15 @@ in
         result = runPipeline den { } root;
       in
       {
-        expr = builtins.length (result.state.imports null);
+        expr = builtins.length (
+          (builtins.foldl' (
+            acc: sd:
+            lib.zipAttrsWith (_: builtins.concatLists) [
+              acc
+              sd
+            ]
+          ) { } (builtins.attrValues (result.state.scopedClassImports null))).nixos or [ ]
+        );
         expected = 1; # sopsConf.nixos
       }
     );
@@ -252,7 +288,15 @@ in
         result = runPipeline den { } root;
       in
       {
-        expr = builtins.length (result.state.imports null);
+        expr = builtins.length (
+          (builtins.foldl' (
+            acc: sd:
+            lib.zipAttrsWith (_: builtins.concatLists) [
+              acc
+              sd
+            ]
+          ) { } (builtins.attrValues (result.state.scopedClassImports null))).nixos or [ ]
+        );
         expected = 1; # only x11.nixos
       }
     );
@@ -278,8 +322,7 @@ in
               meta = {
                 provider = [ ];
               };
-              __functor =
-                _:
+              __fn =
                 { host }:
                 {
                   nixos.hostName = host;
@@ -306,10 +349,9 @@ in
                     }
                   ];
                 };
-              __functionArgs = {
+              __args = {
                 host = false;
               };
-              includes = [ ];
             }
           ];
         };
@@ -321,7 +363,15 @@ in
       in
       {
         # web.nixos (hostName) + keep.nixos (y), skip is tombstoned
-        expr = builtins.length (result.state.imports null);
+        expr = builtins.length (
+          (builtins.foldl' (
+            acc: sd:
+            lib.zipAttrsWith (_: builtins.concatLists) [
+              acc
+              sd
+            ]
+          ) { } (builtins.attrValues (result.state.scopedClassImports null))).nixos or [ ]
+        );
         expected = 2;
       }
     );

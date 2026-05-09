@@ -1,4 +1,4 @@
-# See https://github.com/vic/den/issues/254
+# See https://github.com/denful/den/issues/254
 { denTest, ... }:
 {
   flake.tests.deadbugs-issue-254.hm-user-includes = {
@@ -12,22 +12,19 @@
         ...
       }:
       {
-        den.fxPipeline = false;
         den.default.homeManager.home.stateVersion = "25.11";
         den.hosts.x86_64-linux.igloo.users.tux = { };
 
-        den.ctx.hm-user = {
-          includes = [
-            {
-              homeManager = {
-                programs.nix-index.enable = true;
-              };
-            }
-          ];
-        };
+        den.schema.user.includes = [
+          {
+            homeManager = {
+              programs.nix-index.enable = true;
+            };
+          }
+        ];
 
         den.aspects.tux.homeManager = {
-          # Dont enable this, it should be set via den.ctx.hm-user
+          # Dont enable this, it should be set via den.schema.user.includes
           # programs.nix-index.enable = true;
         };
 
@@ -45,19 +42,16 @@
         ...
       }:
       {
-        den.fxPipeline = false;
         den.default.homeManager.home.stateVersion = "25.11";
         den.hosts.x86_64-linux.igloo.users.tux = { };
 
-        den.ctx.user = {
-          includes = [
-            {
-              homeManager = {
-                programs.nix-index.enable = true;
-              };
-            }
-          ];
-        };
+        den.schema.user.includes = [
+          {
+            homeManager = {
+              programs.nix-index.enable = true;
+            };
+          }
+        ];
 
         expr = tuxHm.programs.nix-index.enable;
         expected = true;
@@ -76,15 +70,13 @@
         den.default.homeManager.home.stateVersion = "25.11";
         den.hosts.x86_64-linux.igloo.users.tux = { };
 
-        den.ctx.hm-host = {
-          includes = [
-            {
-              nixos = {
-                home-manager.useGlobalPkgs = true;
-              };
-            }
-          ];
-        };
+        den.schema.host.includes = [
+          {
+            nixos = {
+              home-manager.useGlobalPkgs = true;
+            };
+          }
+        ];
 
         expr = igloo.home-manager.useGlobalPkgs;
         expected = true;
@@ -100,7 +92,6 @@
         ...
       }:
       {
-        den.fxPipeline = false;
         den.hosts.x86_64-linux.igloo.users.tux.classes = [ "hjem" ];
 
         # hijack a minimal module so hostConf doesn't complain about missing
@@ -118,13 +109,11 @@
           };
         };
 
-        den.ctx.hjem-user = {
-          includes = [
-            {
-              hjem.foo = "bar";
-            }
-          ];
-        };
+        den.schema.user.includes = [
+          {
+            hjem.foo = "bar";
+          }
+        ];
 
         expr = igloo.hjem.users.tux.foo;
         expected = "bar";

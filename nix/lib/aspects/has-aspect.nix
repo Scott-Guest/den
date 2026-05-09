@@ -1,23 +1,32 @@
-# Query whether an aspect is structurally present in a resolved tree.
 # Entity-facing wiring lives in modules/context/has-aspect.nix.
 { lib, den, ... }:
 let
-  inherit (den.lib.aspects) adapters resolve;
-  inherit (adapters) pathKey toPathSet;
+  inherit (den.lib.aspects.fx) identity;
+  inherit (identity) aspectPath pathKey;
 
-  # Validate a ref has both `name` and `meta` (aspectPath requires
-  # both) and return its slash-joined path key.
   refKey =
     ref:
     if (ref ? name) && (ref ? meta) then
-      pathKey (adapters.aspectPath ref)
+      pathKey (aspectPath ref)
     else
       throw "hasAspect: ref must have both `name` and `meta` (got ${builtins.typeOf ref}).";
 
-  # Run collectPaths under `class` on `tree`, returned as an
-  # attrset-as-set keyed by slash-joined path.
+  # Resolve tree via fx pipeline and extract pathSet from state.
+  # Inlines the same root normalization as fxResolveTree (default.nix)
+  # to handle raw lambdas and functor attrsets.
   collectPathSet =
-    { tree, class }: toPathSet ((resolve.withAdapter adapters.collectPaths class tree).paths or [ ]);
+    { tree, class }:
+    let
+      normalized = den.lib.aspects.normalizeRoot tree;
+      result = den.lib.aspects.fx.pipeline.fxFullResolve {
+        inherit class;
+        ctx = den.lib.aspects.fx.aspect.ctxFromHandlers (
+          normalized.__scopeHandlers or tree.__scopeHandlers or { }
+        );
+        self = normalized;
+      };
+    in
+    (result.state.pathSet or (_: { })) null;
 
   hasAspectIn =
     {
@@ -27,9 +36,6 @@ let
     }:
     (collectPathSet { inherit tree class; }) ? ${refKey ref};
 
-  # Build the functor+attrs value attached to entities as `.hasAspect`.
-  # Per-class path sets are thunk-cached inside `setFor` so repeated
-  # calls share one traversal per class.
   mkEntityHasAspect =
     {
       tree,

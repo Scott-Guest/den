@@ -1,4 +1,4 @@
-{ den, ... }:
+{ ... }:
 let
 
   description = ''
@@ -30,13 +30,11 @@ let
 
 in
 {
-  den.provides.user-shell =
-    shell:
-    den.lib.parametric.exactly {
-      inherit description;
-      includes = [
-        ({ host, user }: userShell shell user)
-        ({ home }: userShell shell home)
-      ];
-    };
+  den.provides.user-shell = shell: {
+    inherit description;
+    includes = [
+      ({ host, user }: { name = "user-shell/${user.userName}@${host.name}"; } // userShell shell user)
+      ({ home }: { name = "user-shell/${home.name}"; } // userShell shell home)
+    ];
+  };
 }

@@ -1,5 +1,5 @@
 # This test verifies that aspects do not use lib.functionTo merging semantics on aspect.__functor.
-# See: https://github.com/vic/den/issues/216 and https://github.com/vic/flake-aspects/pull/38
+# See: https://github.com/denful/den/issues/216 and https://github.com/vic/flake-aspects/pull/38
 {
   lib,
   inputs,
@@ -17,9 +17,15 @@ let
           bogusModule
         ];
       };
-      fooAspect = ev.config.den.ctx.foo {
+      entity = ev.config.den.lib.resolveEntity "foo" {
         x = 0;
         y = 1;
+      };
+      # Inject entity-level includes that previously came from den.entityIncludes/schema
+      fooAspect = entity // {
+        includes = entity.includes ++ [
+          ({ x, y }@ctx: ev.config.den.lib.parametric.fixedTo ctx ev.config.den.aspects.foo)
+        ];
       };
       resolve = ev.config.den.lib.aspects.resolve;
       fooModule = resolve "foo" fooAspect;
@@ -71,9 +77,6 @@ in
           }
           {
             den.aspects.foo.includes = [ den.aspects.groups ];
-          }
-          {
-            den.ctx.foo.provides.foo = { x, y }@ctx: parametric.fixedTo ctx den.aspects.foo;
           }
         ];
       }

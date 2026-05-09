@@ -1,6 +1,5 @@
 {
   den,
-  lib,
   inputs,
   ...
 }:
@@ -24,6 +23,8 @@ let
 
 in
 {
-  den.ctx = result.ctx;
   den.schema.host.imports = [ result.hostConf ];
+  den.schema.host.includes = [ result.battery ];
+
+  den.classes.maid.description = "nix-maid user environment";
 }

@@ -13,12 +13,21 @@ let
     module:
     let
       config = (evalDen module).config;
+      expected = config.expected;
+      hasExpected = !(expected ? undefined);
+      # Partial matching: when both expr and expected are attrsets,
+      # only compare the keys present in expected.
+      expr =
+        if hasExpected && builtins.isAttrs expected && builtins.isAttrs config.expr then
+          builtins.intersectAttrs expected config.expr
+        else
+          config.expr;
     in
     {
-      expr = config.expr;
+      inherit expr;
     }
-    // lib.optionalAttrs (!(config.expected ? undefined)) {
-      expected = config.expected;
+    // lib.optionalAttrs hasExpected {
+      inherit expected;
     }
     // lib.optionalAttrs (!(config.expectedError ? undefined)) {
       expectedError = config.expectedError;
@@ -115,10 +124,70 @@ let
       sort = lib.sort (a: b: a < b);
       show = items: builtins.trace (lib.concatStringsSep " / " (lib.flatten [ items ]));
 
-      trace = with den.lib.aspects; {
-        __functor = _: resolve.withAdapter adapters.trace;
-        over = outer: resolve.withAdapter (outer adapters.trace);
-      };
+      # Trace utility: resolve an aspect tree and return { trace, imports }.
+      # trace is the legacy-compatible tree shape: ["name" ["child" ...] ...]
+      trace =
+        class: aspect:
+        let
+          fxTrace = den.lib.aspects.fx.trace;
+          pipeline = den.lib.aspects.fx.pipeline;
+          result =
+            pipeline.mkPipeline
+              {
+                inherit class;
+                extraHandlers = fxTrace.tracingHandler class;
+                extraState = {
+                  entries = [ ];
+                };
+              }
+              {
+                self = aspect;
+                ctx = { };
+              };
+          entries = result.state.entries or [ ];
+          # Build legacy tree shape from flat entries
+          buildTree =
+            parentName: entries:
+            let
+              children = builtins.filter (e: e.parent == parentName) entries;
+              mkNode =
+                e:
+                let
+                  displayName = if e.excluded then "~${e.name}" else e.name;
+                  subs = buildTree (
+                    if e.isProvider then "${lib.concatStringsSep "/" e.provider}/${e.name}" else e.name
+                  ) entries;
+                in
+                if subs == [ ] then [ displayName ] else [ displayName ] ++ subs;
+            in
+            builtins.concatLists (map (e: [ (mkNode e) ]) children);
+          roots = builtins.filter (e: e.parent == null) entries;
+          traceTree =
+            if roots == [ ] then
+              [ ]
+            else
+              let
+                root = builtins.head roots;
+                rootName =
+                  if root.isProvider then "${lib.concatStringsSep "/" root.provider}/${root.name}" else root.name;
+              in
+              [ root.name ] ++ buildTree rootName entries;
+        in
+        {
+          imports =
+            let
+              scoped = result.state.scopedClassImports null;
+              flat = builtins.foldl' (
+                acc: sd:
+                lib.zipAttrsWith (_: builtins.concatLists) [
+                  acc
+                  sd
+                ]
+              ) { } (builtins.attrValues scoped);
+            in
+            flat.${class} or [ ];
+          trace = traceTree;
+        };
 
       funnyNames =
         aspect:

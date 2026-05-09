@@ -1,4 +1,4 @@
-{ den, ... }:
+{ ... }:
 let
   description = ''
     Sets the system hostname as defined in `den.hosts.<name>.hostName`:
@@ -13,11 +13,13 @@ let
   setHostname =
     { host, ... }:
     {
+      name = "hostname/os";
       ${host.class}.networking.hostName = host.hostName;
     };
 in
 {
-  den.provides.hostname = den.lib.parametric.atLeast {
+  den.provides.hostname = {
+    name = "hostname";
     inherit description;
     includes = [ setHostname ];
   };

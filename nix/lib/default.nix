@@ -20,8 +20,6 @@ let
   den-lib = builtins.mapAttrs (_: load) {
     aspects = ./aspects;
     canTake = ./can-take.nix;
-    ctxApply = ./ctx-apply.nix;
-    ctxTypes = ./ctx-types.nix;
     __findFile = ./den-brackets.nix;
     forward = ./forward.nix;
     home-env = ./home-env.nix;
@@ -29,10 +27,14 @@ let
     nixModule = ../nixModule;
     nsTypes = ./namespace-types.nix;
     parametric = ./parametric.nix;
-    statics = ./statics.nix;
     take = ./take.nix;
-    lastFunctionTo = ./last-function-to.nix;
+    policy = ./policy-effects.nix;
+    resolveEntity = ./resolve-entity.nix;
     strict = ./strict.nix;
+    diag = ./diag;
+    policyInspect = ./policy-inspect.nix;
+    schemaUtil = ./schema-util.nix;
+    synthesizePolicies = ./synthesize-policies.nix;
     fx = ./fx.nix;
   };
 in

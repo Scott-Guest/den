@@ -1,94 +1,30 @@
+# Tests for policy-based transitions (formerly ctx nested into).
+# Nested-path into was removed with den.ctx — only flat policies remain.
 { denTest, lib, ... }:
 {
   flake.tests.ctx-nested = {
 
-    test-two-level-nesting = denTest (
-      { den, funnyNames, ... }:
-      {
-        den.ctx.ns.inner.provides.inner =
-          { z }:
-          {
-            funny.names = [ "inner-${z}" ];
-          };
-
-        den.ctx.root.provides.root =
-          { v }:
-          {
-            funny.names = [ v ];
-          };
-        den.ctx.root.into =
-          { v }:
-          {
-            ns.inner = [ { z = v; } ];
-          };
-
-        expr = funnyNames (den.ctx.root { v = "hello"; });
-        expected = [
-          "hello"
-          "inner-hello"
-        ];
-      }
-    );
-
-    test-three-level-nesting = denTest (
-      { den, funnyNames, ... }:
-      {
-        den.ctx.a.b.c.provides.c =
-          { z }:
-          {
-            funny.names = [ "abc-${z}" ];
-          };
-
-        den.ctx.start.into =
-          { z }:
-          {
-            a.b.c = [ { z = z; } ];
-          };
-
-        expr = funnyNames (den.ctx.start { z = "deep"; });
-        expected = [ "abc-deep" ];
-      }
-    );
-
-    test-dedup-by-full-path = denTest (
-      { den, funnyNames, ... }:
-      {
-        den.ctx.a.leaf.provides.leaf =
-          { v }:
-          {
-            funny.names = [ "a-${v}" ];
-          };
-        den.ctx.b.leaf.provides.leaf =
-          { v }:
-          {
-            funny.names = [ "b-${v}" ];
-          };
-
-        den.ctx.root.into = _: {
-          a.leaf = [ { v = "x"; } ];
-          b.leaf = [ { v = "y"; } ];
-        };
-
-        expr = funnyNames (den.ctx.root { });
-        expected = [
-          "a-x"
-          "b-y"
-        ];
-      }
-    );
-
     test-flat-still-works = denTest (
       { den, funnyNames, ... }:
       {
-        den.ctx.flat.provides.flat =
-          { x }:
-          {
-            funny.names = [ x ];
-          };
+        den.schema.flat.includes = [ ];
 
-        den.ctx.root.into.flat = lib.singleton;
-
-        expr = funnyNames (den.ctx.root { x = "hi"; });
+        den.policies.test-root-to-flat =
+          { ... }@ctx:
+          let
+            inherit (den.lib.policy) resolve include;
+          in
+          [
+            (resolve.to "flat" ctx)
+            (include (
+              { x }:
+              {
+                funny.names = [ x ];
+              }
+            ))
+          ];
+        den.schema.root.includes = [ den.policies.test-root-to-flat ];
+        expr = funnyNames (den.lib.resolveEntity "root" { x = "hi"; });
         expected = [ "hi" ];
       }
     );
@@ -96,69 +32,56 @@
     test-into-root-and-child-merge = denTest (
       { den, funnyNames, ... }:
       {
-        den.ctx.leaf.provides.leaf =
-          { v }:
-          {
-            funny.names = [ v ];
-          };
-
-        imports = [
-          {
-            den.ctx.root.into = _: {
-              leaf = [ { v = "a"; } ];
-            };
-          }
-
-          {
-            den.ctx.root.into.leaf = _: [ { v = "b"; } ];
-          }
-
-          {
-            den.ctx.root.into.leaf = _: [ { v = "c"; } ];
-          }
-
-          {
-            den.ctx.root.into = _: {
-              leaf = [ { v = "d"; } ];
-            };
-          }
+        den.schema.leaf.includes = [
+          (
+            { v }:
+            {
+              funny.names = [ v ];
+            }
+          )
         ];
 
-        expr = funnyNames (den.ctx.root { });
+        den.policies.test-root-to-leaf-a =
+          _:
+          let
+            inherit (den.lib.policy) resolve;
+          in
+          [ (resolve.to "leaf" { v = "a"; }) ];
+
+        den.policies.test-root-to-leaf-b =
+          _:
+          let
+            inherit (den.lib.policy) resolve;
+          in
+          [ (resolve.to "leaf" { v = "b"; }) ];
+
+        den.policies.test-root-to-leaf-c =
+          _:
+          let
+            inherit (den.lib.policy) resolve;
+          in
+          [ (resolve.to "leaf" { v = "c"; }) ];
+
+        den.policies.test-root-to-leaf-d =
+          _:
+          let
+            inherit (den.lib.policy) resolve;
+          in
+          [ (resolve.to "leaf" { v = "d"; }) ];
+
+        den.schema.root.includes = [
+          den.policies.test-root-to-leaf-a
+          den.policies.test-root-to-leaf-b
+          den.policies.test-root-to-leaf-c
+          den.policies.test-root-to-leaf-d
+        ];
+
+        expr = funnyNames (den.lib.resolveEntity "root" { });
         expected = [
           "a"
           "b"
           "c"
           "d"
-        ];
-      }
-    );
-
-    test-into-mixed-flat-and-nested = denTest (
-      { den, funnyNames, ... }:
-      {
-        den.ctx.ns.deep.provides.deep =
-          { k }:
-          {
-            funny.names = [ "deep-${k}" ];
-          };
-        den.ctx.flat.provides.flat =
-          { k }:
-          {
-            funny.names = [ "flat-${k}" ];
-          };
-
-        den.ctx.root.into =
-          { k }:
-          {
-            flat = [ { inherit k; } ];
-            ns.deep = [ { inherit k; } ];
-          };
-
-        expr = funnyNames (den.ctx.root { k = "v"; });
-        expected = [
-          "deep-v"
-          "flat-v"
         ];
       }
     );

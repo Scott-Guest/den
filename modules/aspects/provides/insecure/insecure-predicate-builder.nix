@@ -1,9 +1,5 @@
-{ den, lib, ... }:
+{ lib, ... }:
 let
-  inherit (den.lib)
-    parametric
-    ;
-
   description = ''
     This is a private aspect always included in den.default.
 
@@ -16,11 +12,11 @@ let
   insecureModule =
     { config, ... }@args:
     let
-      # nixpkgs.config must not be set when useGlobalPkgs is true.
       globalPkgs = args.osConfig.home-manager.useGlobalPkgs or false;
       hasInsecure = config.permittedInsecurePackages.packages != [ ];
     in
     {
+      key = "den/insecure-predicate";
       options.permittedInsecurePackages.packages = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         defaultText = lib.literalExpression "[ ]";
@@ -34,22 +30,28 @@ let
   osAspect =
     { host }:
     {
+      name = "insecure-predicate/os";
       ${host.class}.imports = [ insecureModule ];
     };
 
   userAspect =
     { host, user }:
-    lib.optionalAttrs (lib.elem "homeManager" user.classes) {
+    {
+      name = "insecure-predicate/user";
+    }
+    // lib.optionalAttrs (lib.elem "homeManager" user.classes) {
       homeManager.imports = [ insecureModule ];
     };
 
   homeAspect =
     { home }:
     {
+      name = "insecure-predicate/home";
       ${home.class}.imports = [ insecureModule ];
     };
 
-  aspect = parametric.exactly {
+  aspect = {
+    name = "insecure-predicate";
     inherit description;
     includes = [
       osAspect

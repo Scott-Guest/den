@@ -6,9 +6,11 @@
       { den, funnyNames, ... }:
       {
         den.hosts.x86_64-linux.igloo = { };
-        den.ctx.hm-host.funny.names = [ "hm-host-owned" ];
+        den.schema.hm-host.includes = [
+          { funny.names = [ "hm-host-owned" ]; }
+        ];
 
-        expr = funnyNames (den.ctx.host { host = den.hosts.x86_64-linux.igloo; });
+        expr = funnyNames (den.lib.resolveEntity "host" { host = den.hosts.x86_64-linux.igloo; });
         expected = [ ];
       }
     );
@@ -17,11 +19,11 @@
       { den, funnyNames, ... }:
       {
         den.hosts.x86_64-linux.igloo = { };
-        den.ctx.hm-host.includes = [
+        den.schema.hm-host.includes = [
           { funny.names = [ "hm-host-include" ]; }
         ];
 
-        expr = funnyNames (den.ctx.host { host = den.hosts.x86_64-linux.igloo; });
+        expr = funnyNames (den.lib.resolveEntity "host" { host = den.hosts.x86_64-linux.igloo; });
         expected = [ ];
       }
     );

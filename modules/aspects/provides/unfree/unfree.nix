@@ -11,21 +11,41 @@ let
     It will dynamically provide a module for each class when accessed.
   '';
 
-  __functor =
-    _self: allowed-names:
-    { class, aspect-chain }:
-    if
-      (builtins.elem class [
-        "nixos"
-        "darwin"
-        "homeManager"
-      ])
-    then
+  __functor = _self: allowed-names: {
+    name = "unfree(${builtins.concatStringsSep "," allowed-names})";
+    meta.provider = [
+      "den"
+      "provides"
+    ];
+    __fn =
       {
-        ${class}.unfree.packages = allowed-names;
-      }
-    else
-      { };
+        class,
+        host ? null,
+        ...
+      }:
+      let
+        validClasses = [
+          "nixos"
+          "darwin"
+          "homeManager"
+        ];
+        classModule =
+          if builtins.elem class validClasses then { ${class}.unfree.packages = allowed-names; } else { };
+        # When resolving for homeManager at user scope, also emit to the
+        # host's OS class. This ensures nixpkgs.config.allowUnfreePredicate
+        # covers these packages when home-manager.useGlobalPkgs = true.
+        hostModule =
+          if class == "homeManager" && host != null && builtins.elem host.class validClasses then
+            { ${host.class}.unfree.packages = allowed-names; }
+          else
+            { };
+      in
+      classModule // hostModule;
+    __args = {
+      class = true;
+      host = true;
+    };
+  };
 in
 {
   den.provides.unfree = {

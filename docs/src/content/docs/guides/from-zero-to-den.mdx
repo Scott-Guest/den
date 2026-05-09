@@ -172,7 +172,7 @@ This is all that is happening at `modules/den.nix`.
 
 4. **Host definitions** go inside `den.hosts`.
 
-    This single line defines a **host** with hostName `igloo`, platform `x86_64-linux` from which `class = "nixos"` is derived, and a single user `tux` in it. See [Declare Hosts & Users](/guide/declare-hosts) for more.
+    This single line defines a **host** with hostName `igloo`, platform `x86_64-linux` from which `class = "nixos"` is derived, and a single user `tux` in it. See [Declare Hosts & Users](/guides/declare-hosts) for more.
 
     Den **automatically** creates an aspect for each host that looks like this:
 
@@ -194,7 +194,7 @@ This is all that is happening at `modules/den.nix`.
     ```nix "homeManager" "hjem" "maid"
     den.hosts.x86_64-linux.igloo.users = {
       tux = { 
-        likes = [ "fishes"; ];
+        likes = [ "fishes" ];
         classes = [ "homeManager" "hjem" ];
       };
       pingu = {
@@ -228,7 +228,7 @@ This is all that is happening at `modules/den.nix`.
     Den aspects are parametric, they are funtions taking a contexts. A context like `{host}` is simply an attribute set that holds the `igloo` host definition from our examples. These are **arguments** to real Nix functions, NOT `_module.args` nor `specialArgs`. This is why these values can be used for conditional includes.
 
     Den **provides** some common batteries. Re-usable aspects like
-    [`den.provides.hostname`](https://github.com/vic/den/blob/main/modules/aspects/provides/hostname.nix) which is defined like this:
+    [`den.provides.hostname`](https://github.com/denful/den/blob/main/modules/aspects/provides/hostname.nix) which is defined like this:
 
     ```nix "host," "host.hostName"
     den.provides.hostname = { host, ... }: { # host = igloo definition
@@ -247,7 +247,7 @@ This is all that is happening at `modules/den.nix`.
 
 10. Include re-usable `{host, user}` batteries.
 
-    Batteries like [`den.provides.primary-user`](https://github.com/vic/den/blob/main/modules/aspects/provides/primary-user.nix) take the `{host, user}` context where `host` is the `igloo` definition and `user` is the `tux` definition.
+    Batteries like [`den.provides.primary-user`](https://github.com/denful/den/blob/main/modules/aspects/provides/primary-user.nix) take the `{host, user}` context where `host` is the `igloo` definition and `user` is the `tux` definition.
 
     These batteries also serve as example for you to create custom re-usable pieces of configuration shareable on several user/hosts or shared with the community.
 
@@ -275,6 +275,6 @@ You can now head over to other guides or the reference:
 
 - [den.schema](/reference/schema)
 - [den.aspects](/reference/aspects)
-- [den.ctx](/reference/ctx)
+- [den.policies](/reference/policies)
 - [den.provides](/reference/batteries)
 

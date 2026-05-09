@@ -7,7 +7,7 @@
     }).config.flake;
 
   inputs = {
-    den.url = "github:vic/den";
+    den.url = "github:denful/den";
     import-tree.url = "github:vic/import-tree";
 
     nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
@@ -26,7 +26,7 @@
     nix-unit.url = "github:nix-community/nix-unit";
     nix-unit.inputs.nixpkgs.follows = "nixpkgs";
 
-    nix-effects.url = "github:vic/nix-effects";
+    nix-effects.url = "github:denful/nix-effects";
     nix-effects.inputs.nixpkgs.follows = "nixpkgs";
     nix-effects.inputs.nix-unit.follows = "nix-unit";
   };

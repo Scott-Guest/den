@@ -14,16 +14,17 @@
     }:
     let
       inherit (den.lib) parametric take;
+      inherit (den.lib.policy) include;
 
       keys = ctx: "{${builtins.concatStringsSep "," (builtins.attrNames ctx)}}";
     in
     {
 
       den.hosts.x86_64-linux.igloo.users.tux = { };
-      den.ctx.user.includes = [ den.provides.mutual-provider ];
 
       den.aspects.igloo.funny.names = [ "host-owned" ];
       den.aspects.igloo.includes = [
+        den.aspects.igloo.policies.to-users
         (take.exactly (
           { host }:
           {
@@ -37,45 +38,51 @@
           }
         ))
       ];
-      den.aspects.igloo.provides.to-users.includes = [
-        { funny.names = [ "host-static" ]; }
+      den.aspects.igloo.policies.to-users =
+        { host, user, ... }:
+        [
+          (include {
+            includes = [
+              { funny.names = [ "host-static" ]; }
 
-        (
-          { host, ... }@ctx:
-          {
-            funny.names = [ "host-lax ${keys ctx}" ];
-          }
-        )
-        (take.atLeast (
-          { host, never }:
-          {
-            funny.names = throw "unreachable";
-          }
-        ))
+              (
+                { host, ... }@ctx:
+                {
+                  funny.names = [ "host-lax ${keys ctx}" ];
+                }
+              )
+              (take.atLeast (
+                { host, never }:
+                {
+                  funny.names = throw "unreachable";
+                }
+              ))
 
-        (
-          { host, user, ... }@ctx:
-          {
-            funny.names = [ "host+user-lax ${keys ctx}" ];
-          }
-        )
-        (take.exactly (
-          { host, user }:
-          {
-            funny.names = [ "host+user-exact" ];
-          }
-        ))
-        (take.atLeast (
-          {
-            host,
-            user,
-            never,
-          }:
-          {
-            funny.names = throw "unreachable";
-          }
-        ))
-      ];
+              (
+                { host, user, ... }@ctx:
+                {
+                  funny.names = [ "host+user-lax ${keys ctx}" ];
+                }
+              )
+              (take.exactly (
+                { host, user }:
+                {
+                  funny.names = [ "host+user-exact" ];
+                }
+              ))
+              (take.atLeast (
+                {
+                  host,
+                  user,
+                  never,
+                }:
+                {
+                  funny.names = throw "unreachable";
+                }
+              ))
+            ];
+          })
+        ];
 
       den.aspects.tux.funny.names = [ "user-owned" ];
       den.aspects.tux.includes = [
@@ -105,8 +112,8 @@
         ))
       ];
 
-      den.ctx.hm-host.funny.names = [ "hm-host detected" ];
-      den.ctx.hm-host.includes = [
+      den.schema.host.includes = [
+        { funny.names = [ "hm-host detected" ]; }
         (
           { host, ... }@ctx:
           {
@@ -115,7 +122,7 @@
         )
       ];
 
-      den.ctx.hm-user.includes = [
+      den.schema.user.includes = [
         (
           { host, user, ... }@ctx:
           {
@@ -126,49 +133,57 @@
 
       den.default.funny.names = [ "default-owned" ];
       den.default.includes = [
-        { funny.names = [ "default-static" ]; }
-        (ctx: { funny.names = [ "default-anyctx ${keys ctx}" ]; })
+        {
+          name = "default-static-inc";
+          funny.names = [ "default-static" ];
+        }
+        (ctx: {
+          name = "default-anyctx-inc";
+          funny.names = [ "default-anyctx ${keys ctx}" ];
+        })
 
         (
           { host, ... }@ctx:
           {
+            name = "default-host-lax-inc";
             funny.names = [ "default-host-lax ${keys ctx}" ];
           }
         )
         (
           { user, ... }@ctx:
           {
+            name = "default-user-lax-inc";
             funny.names = [ "default-user-lax ${keys ctx}" ];
           }
         )
         (
           { host, user, ... }@ctx:
           {
+            name = "default-host+user-lax-inc";
             funny.names = [ "default-host+user-lax ${keys ctx}" ];
           }
         )
       ];
 
       expr = funnyNames (
-        den.ctx.host {
+        den.lib.resolveEntity "host" {
           host = den.hosts.x86_64-linux.igloo;
         }
       );
 
+      # Post-ctx semantics: default resolves once via host→default.
+      # Includes fire once with available context. Deferred includes
+      # (requiring user) fire when context widens via drain-deferred.
+      # No include fires twice — no per-source re-resolution.
       expected = [
-        "default-anyctx {aspect-chain,class}"
-        "default-anyctx {host,user}"
-        "default-anyctx {host}"
-
         "default-host+user-lax {host,user}"
-        "default-host-lax {host,user}"
         "default-host-lax {host}"
 
         "default-owned"
 
         "default-static"
 
-        "default-user-lax {host,user}"
+        "default-user-lax {user}"
 
         "hm-host detected"
         "hm-host host-lax {host}"
@@ -178,13 +193,13 @@
         "host+user-lax {host,user}"
 
         "host-exact"
-        "host-lax {host,user}"
+        "host-lax {host}"
 
         "host-owned"
         "host-static"
 
         "user-exact"
-        "user-lax {host,user}"
+        "user-lax {user}"
         "user-owned"
         "user-static"
       ];

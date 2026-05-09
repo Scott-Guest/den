@@ -26,7 +26,11 @@
           };
           includes = [ inner ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect provider;
+        comp = fx.send "resolve" {
+          aspect = provider;
+          identity = den.lib.aspects.fx.identity.key provider;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -36,7 +40,7 @@
           };
           state = den.lib.aspects.fx.pipeline.defaultState;
         } comp;
-        child = builtins.head result.value.includes;
+        child = builtins.head (builtins.head result.value).includes;
       in
       {
         expr = child.nixos.networking.hostName;
@@ -61,18 +65,20 @@
         parametricDev = {
           name = "dev";
           meta = { };
-          __functor =
-            _:
+          __fn =
             { user }:
             {
               includes = [ staticBase ];
             };
-          __functionArgs = {
+          __args = {
             user = false;
           };
-          includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parametricDev;
+        comp = fx.send "resolve" {
+          aspect = parametricDev;
+          identity = den.lib.aspects.fx.identity.key parametricDev;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -82,7 +88,7 @@
           };
           state = den.lib.aspects.fx.pipeline.defaultState;
         } comp;
-        child = builtins.head result.value.includes;
+        child = builtins.head (builtins.head result.value).includes;
       in
       {
         expr = child.nixos.programs.git.enable;
@@ -103,7 +109,11 @@
           };
           includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect factoryResult;
+        comp = fx.send "resolve" {
+          aspect = factoryResult;
+          identity = den.lib.aspects.fx.identity.key factoryResult;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -113,7 +123,7 @@
         } comp;
       in
       {
-        expr = result.value.nixos.users.users.tux.description;
+        expr = (builtins.head result.value).nixos.users.users.tux.description;
         expected = "hello";
       }
     );
@@ -138,7 +148,11 @@
           };
           includes = [ child ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -146,7 +160,7 @@
           };
           state = den.lib.aspects.fx.pipeline.defaultState;
         } comp;
-        childResult = builtins.head result.value.includes;
+        childResult = builtins.head (builtins.head result.value).includes;
       in
       {
         expr = childResult.meta.provider;
@@ -167,23 +181,25 @@
         mid = {
           name = "mid";
           meta = { };
-          __functor =
-            _:
+          __fn =
             { user }:
             {
               includes = [ leaf ];
             };
-          __functionArgs = {
+          __args = {
             user = false;
           };
-          includes = [ ];
         };
         root = {
           name = "root";
           meta = { };
           includes = [ mid ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect root;
+        comp = fx.send "resolve" {
+          aspect = root;
+          identity = den.lib.aspects.fx.identity.key root;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -194,7 +210,7 @@
           };
           state = den.lib.aspects.fx.pipeline.defaultState;
         } comp;
-        midResult = builtins.head result.value.includes;
+        midResult = builtins.head (builtins.head result.value).includes;
         leafResult = builtins.head midResult.includes;
       in
       {

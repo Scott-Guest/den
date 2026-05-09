@@ -23,10 +23,19 @@
       igloo,
       ...
     }:
+    let
+      inherit (den.lib.policy) include;
+    in
     {
       den.hosts.x86_64-linux.igloo.users.tux = { };
-      den.ctx.user.includes = [ den.provides.mutual-provider ];
-      den.aspects.igloo.provides.to-users.includes = [ den.provides.define-user ];
+      den.aspects.igloo.policies.to-users =
+        { host, user, ... }:
+        [
+          (include {
+            includes = [ den.provides.define-user ];
+          })
+        ];
+      den.aspects.igloo.includes = [ den.aspects.igloo.policies.to-users ];
       expr = igloo.users.users.tux.isNormalUser;
       expected = true;
     }

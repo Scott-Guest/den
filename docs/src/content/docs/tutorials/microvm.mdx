@@ -7,10 +7,10 @@ description: Feature showcase MicroVM integration with custom context pipelines 
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="Source" icon="github">
-[`templates/microvm`](https://github.com/vic/den/tree/main/templates/microvm)
+[`templates/microvm`](https://github.com/denful/den/tree/main/templates/microvm)
 </Aside>
 
-[templates/microvm](https://github.com/vic/den/tree/main/templates/microvm) demonstrates Den's extensibility: custom `den.ctx` and `den.schema` extensions for integrating other Nix libraries like [MicroVM.nix](https://github.com/microvm-nix/microvm.nix). 
+[templates/microvm](https://github.com/denful/den/tree/main/templates/microvm) demonstrates Den's extensibility: custom `den.schema` and `den.policies` extensions for integrating other Nix libraries like [MicroVM.nix](https://github.com/microvm-nix/microvm.nix).
 
 This template shows two patterns for building MicroVMs with Den.
 
@@ -20,8 +20,8 @@ This template shows two patterns for building MicroVMs with Den.
 
 A standalone NixOS configuration that runs as MicroVM directly as an application.
 
-- Den example: [runnable-example.nix](https://github.com/vic/den/tree/main/templates/microvm/modules/runnable-example.nix)
-- Den support: [microvm-runners.nix](https://github.com/vic/den/tree/main/templates/microvm/modules/microvm-runners.nix)
+- Den example: [runnable-example.nix](https://github.com/denful/den/tree/main/templates/microvm/modules/runnable-example.nix)
+- Den support: [microvm-runners.nix](https://github.com/denful/den/tree/main/templates/microvm/modules/microvm-runners.nix)
 
 ```console
 nix run .#runnable-microvm
@@ -33,8 +33,8 @@ See [MicroVM Docs on Package Runners](https://microvm-nix.github.io/microvm.nix/
 
 Guest MicroVMs declared on a host and managed together.
 
-- Den example: [guests-example.nix](https://github.com/vic/den/tree/main/templates/microvm/modules/guests-example.nix)
-- Den support: [microvm-integration.nix](https://github.com/vic/den/tree/main/templates/microvm/modules/microvm-integration.nix)
+- Den example: [guests-example.nix](https://github.com/denful/den/tree/main/templates/microvm/modules/guests-example.nix)
+- Den support: [microvm-integration.nix](https://github.com/denful/den/tree/main/templates/microvm/modules/microvm-integration.nix)
 
 ```console
 nixos-rebuild build --flake .#server
@@ -46,7 +46,7 @@ See [MicroVM Docs on Declarative MicroVMs](https://microvm-nix.github.io/microvm
 
 ```console
 mkdir my-nix && cd my-nix
-nix flake init -t github:vic/den#microvm
+nix flake init -t github:denful/den#microvm
 nix flake update den
 ```
 
@@ -125,20 +125,21 @@ Two-stage pipeline for MicroVM host and guests:
 
 ```nix
 # Stage 1: host → microvm-host (only if guests is non-empty)
-ctx.host.into.microvm-host = { host }:
+den.policies.host-to-microvm-host = { host }:
   lib.optional (host.microvm.guests != []) { inherit host; };
 
-# microvm-host provides Host configuration
-ctx.microvm-host.provides.microvm-host = { host }: {
+# microvm-host aspect provides Host configuration
+den.aspects.microvm-host-config = { host }: {
   ${host.class}.imports = [ host.microvm.hostModule ];
 };
+den.schema.microvm-host.includes = [ den.aspects.microvm-host-config ];
 
-# Stage 2: microvm-host → microvm-guest
-ctx.microvm-host.into.microvm-guest = { host }:
-  map (vm: { inherit host vm; }) host.microvm.guests;
+# microvm-host → microvm-guest policy
+den.policies.microvm-host-to-microvm-guest = { host, ... }:
+  map (vm: policy.resolve.to "microvm-guest" { inherit host vm; }) host.microvm.guests;
 
 # Guest configuration forwarded to host
-ctx.microvm-host.provides.microvm-guest = { host, vm }: {
+den.aspects.microvm-guest-config = { host, vm }: {
   includes = [
     # Auto-share nix store if enabled
     sharedNixStore
@@ -157,12 +158,12 @@ ctx.microvm-host.provides.microvm-guest = { host, vm }: {
 ```mermaid
 graph TD
     D1["server host"]
-    D2["den.ctx.host<br/>normal pipeline"]
+    D2["host stage<br/>normal pipeline"]
     D3["server nixos config"]
     D5["host.microvm.host<br/>loaded"]
     
     D6["guest-microvm host"]
-    D7["den.ctx.host<br/>NORMAL PIPELINE"]
+    D7["host stage<br/>NORMAL PIPELINE"]
     D8["guest nixos config<br/>+ microvm class<br/>all Den features supported"]
     
     D9["forward to host:<br/>microvm.vms.guest-microvm.config"]
@@ -173,7 +174,7 @@ graph TD
     D2 -->|microvm.guests != empty<br/>triggers microvm-host| D5
     D2 -->|produces| D3
     
-    D6 -->|Uses normal Den pipeline<br/>den.ctx.host host=guest| D7
+    D6 -->|Uses normal Den pipeline<br/>host stage host=guest| D7
     D7 -->|produces| D8
     
     D8 -->|forward nixos| D9

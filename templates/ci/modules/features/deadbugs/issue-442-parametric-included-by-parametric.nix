@@ -4,7 +4,7 @@
 # { includes = [fn]; __functor = defaultFunctor; }. mapIncludes was skipping
 # includes that have __functor, so the inner parametric fn never received
 # user/host context and its config was silently dropped.
-# https://github.com/vic/den/issues/442
+# https://github.com/denful/den/issues/442
 { denTest, ... }:
 {
   flake.tests.deadbugs-issue-442 = {
@@ -13,7 +13,6 @@
     test-parametric-aspect-included-by-parametric-aspect = denTest (
       { den, igloo, ... }:
       {
-        den.fxPipeline = false;
         den.hosts.x86_64-linux.igloo.users.tux = { };
 
         den.aspects.git =
@@ -54,7 +53,6 @@
         ...
       }:
       {
-        den.fxPipeline = false;
         den.hosts.x86_64-linux.igloo.users.tux = { };
 
         den.aspects.shell =

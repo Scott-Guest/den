@@ -1,10 +1,5 @@
-{ den, lib, ... }:
+{ lib, ... }:
 let
-  inherit (den.lib)
-    parametric
-    take
-    ;
-
   description = ''
     This is a private aspect always included in den.default.
 
@@ -17,11 +12,11 @@ let
   unfreeModule =
     { config, ... }@args:
     let
-      # nixpkgs.config must not be set when useGlobalPkgs is true.
       globalPkgs = args.osConfig.home-manager.useGlobalPkgs or false;
       hasUnfree = config.unfree.packages != [ ];
     in
     {
+      key = "den/unfree-predicate";
       options.unfree.packages = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         defaultText = lib.literalExpression "[ ]";
@@ -35,22 +30,28 @@ let
   osAspect =
     { host }:
     {
+      name = "unfree-predicate/os";
       ${host.class}.imports = [ unfreeModule ];
     };
 
   userAspect =
     { host, user }:
-    lib.optionalAttrs (lib.elem "homeManager" user.classes) {
+    {
+      name = "unfree-predicate/user";
+    }
+    // lib.optionalAttrs (lib.elem "homeManager" user.classes) {
       homeManager.imports = [ unfreeModule ];
     };
 
   homeAspect =
     { home }:
     {
+      name = "unfree-predicate/home";
       ${home.class}.imports = [ unfreeModule ];
     };
 
-  aspect = parametric.exactly {
+  aspect = {
+    name = "unfree-predicate";
     inherit description;
     includes = [
       osAspect

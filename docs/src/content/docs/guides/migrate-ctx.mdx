@@ -1,0 +1,115 @@
+---
+title: Migrating from den.ctx
+description: Upgrade from the deprecated den.ctx API to den.aspects, den.schema, and den.policies.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+`den.ctx` is deprecated. A compatibility shim forwards `den.ctx` definitions to
+`den.schema.<kind>.includes` with deprecation warnings, so existing configs still
+evaluate — but you should migrate to remove the warnings and use the current API.
+
+## What changed
+
+| Old (`den.ctx`)                     | New                                      | Notes                                         |
+| ----------------------------------- | ---------------------------------------- | --------------------------------------------- |
+| `den.ctx.<name> = { ... }`          | `den.aspects.<name> = { ... }`           | Aspect definitions live here now.             |
+| `den.ctx.<name>.includes`           | `den.schema.<kind>.includes`             | Explicit activation on entity kinds.          |
+| `den.ctx.<name>.provides.<p>`       | `den.schema.<kind>.includes` or policy   | Cross-entity inclusion via schema or policy.  |
+| `den.ctx.<name>.into`               | `den.policies`                           | Entity topology via first-class policies.     |
+| `den.ctx.<name>.meta.adapter`       | *(removed)*                              | Pipeline handles class routing automatically. |
+| `den.lib.ctxApply`                  | *(removed)*                              | No shim — see step 5 below.                  |
+
+<Aside type="tip">
+The shim handles the common case automatically: `den.ctx.<name>` entries are
+forwarded as `den.schema.<name>.includes`. Only `into` transitions and direct
+`ctxApply` calls require manual migration.
+</Aside>
+
+## Compatibility shim
+
+The shim (`modules/compat/ctx-shim.nix`) is always imported. At evaluation time
+it forwards `den.ctx.<name>` values into `den.schema.<name>.includes` with
+`lib.warn` deprecation messages. The shim handles flat entries only — `den.ctx`
+never supported nested namespaces.
+
+The shim will be removed after the first stable release.
+
+## Migration steps
+
+<Steps>
+
+1. **Move aspect definitions to `den.aspects`**
+
+    Aspect content that was defined inline in `den.ctx` moves to the aspects
+    registry:
+
+    ```nix
+    # Before
+    den.ctx.host = {
+      provides.host = { host }: den.aspects.${host.aspect};
+    };
+
+    # After
+    den.aspects.my-aspect = { host }: {
+      nixos.services.foo.enable = true;
+    };
+    ```
+
+2. **Activate aspects via `den.schema.*.includes`**
+
+    Instead of `den.ctx.<name>.includes`, add aspects to the relevant entity
+    kind's includes list:
+
+    ```nix
+    # Before
+    den.ctx.host.includes = [ den.provides.hostname ];
+
+    # After
+    den.schema.host.includes = [ den.provides.hostname ];
+    ```
+
+3. **Move `into` transitions to `den.policies`**
+
+    If you used `den.ctx.<name>.into` to fan out from one entity kind to
+    another, declare an explicit policy:
+
+    ```nix
+    # Before
+    den.ctx.host.into = { host }:
+      map (user: { inherit host user; }) (lib.attrValues host.users);
+
+    # After
+    den.policies.host-to-users = { host, ... }:
+      map (user: policy.resolve.to "user" { inherit host user; })
+        (lib.attrValues host.users);
+    ```
+
+    See [Policies](/explanation/policies/) for the full policy model.
+
+4. **Remove `meta.adapter`**
+
+    The `meta.adapter` option no longer exists. The pipeline determines
+    which class keys apply to each output automatically. Delete any
+    `meta.adapter` assignments.
+
+5. **Replace `ctxApply` calls**
+
+    `den.lib.ctxApply` has no compatibility shim. If you called it directly,
+    replace it with aspect definitions activated via `den.schema.*.includes`.
+
+6. **Verify**
+
+    Rebuild your system and confirm no deprecation warnings remain:
+
+    ```sh
+    nixos-rebuild build --flake . 2>&1 | grep -i 'deprecated'
+    ```
+
+</Steps>
+
+## Further reading
+
+- [Policies](/explanation/policies/) — declaring how entity kinds relate
+- [Entities & Schema](/explanation/entities/) — entity declarations and schema
+- [den.ctx compat shim](/explanation/context-system/) — what the shim does

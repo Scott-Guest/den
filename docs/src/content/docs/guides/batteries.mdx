@@ -6,7 +6,7 @@ description: Built-in den.provides.* aspects for common tasks.
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="Source" icon="github">
-[`modules/aspects/provides/`](https://github.com/vic/den/tree/main/modules/aspects/provides)
+[`modules/aspects/provides/`](https://github.com/denful/den/tree/main/modules/aspects/provides)
 </Aside>
 
 ## What are Batteries
@@ -42,7 +42,7 @@ Allows hosts and users to contribute configuration **to each other** through `.p
 
 ```nix
 den.hosts.x86_64-linux.igloo.users.tux = { };
-den.ctx.user.includes = [ den._.mutual-provider ];
+den.schema.user.includes = [ den._.mutual-provider ];
 ```
 
 ```nix
@@ -108,10 +108,10 @@ directory names (`_nixos/`, `_darwin/`, `_homeManager/`):
 
 ```nix
 # Import per host
-den.ctx.host.includes = [ (den.provides.import-tree._.host ./hosts) ];
+den.schema.host.includes = [ (den.provides.import-tree._.host ./hosts) ];
 
 # Import per user
-den.ctx.user.includes = [ (den.provides.import-tree._.user ./users) ];
+den.schema.user.includes = [ (den.provides.import-tree._.user ./users) ];
 
 # Import for a specific aspect
 den.aspects.laptop.includes = [ (den.provides.import-tree ./disko) ];
@@ -203,7 +203,8 @@ den.aspects.alice.includes = [
 Batteries compose with regular aspects:
 
 ```nix
-den.aspects.my-admin = den.lib.parametric {
+# den.lib.parametric is deprecated — bare attrsets work directly:
+den.aspects.my-admin = {
   includes = [
     den.provides.primary-user
     (den.provides.user-shell "fish")

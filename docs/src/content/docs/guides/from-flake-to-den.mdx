@@ -14,7 +14,7 @@ Den has several templates with [different feature sets](/tutorials/overview).
 </Aside>
 
 <Aside title="Adopting Den for NixOS and nix-Darwin flakes" icon="nix">
-Den adapts to your Nix choices. This guide shows how to **integrate** Den without disrupting your **existing flake**, allowing an smooth, incremental adotpion path.
+Den adapts to your Nix choices. This guide shows how to **integrate** Den without disrupting your **existing flake**, allowing a smooth, incremental adoption path.
 
 If you want a **Den only** flake example, take a look at `templates/minimal` or if you are using flake-parts see `templates/default`.
 
@@ -54,7 +54,7 @@ Suppose you have a flake like this with a `nixosConfigurations.igloo`:
 ### Step 1. A basic `modules/den.nix`
 
 <Aside>
-See [*From Zero To Den*](/guides/from-zero-to-den) for all the defails about this.
+See [*From Zero To Den*](/guides/from-zero-to-den) for all the details about this.
 
 Also read the **No Monoliths** aside in that page about splitting this example configuration.
 </Aside>
@@ -77,7 +77,7 @@ Also read the **No Monoliths** aside in that page about splitting this example c
 
   den.aspects.tux = {
     includes = [ den.provides.define-user den.provides.primary-user ];
-    homeManager = { pkgs, ... }: { packages = [ pkgs.vim ]; };
+    homeManager = { pkgs, ... }: { home.packages = [ pkgs.vim ]; };
   };
 }
 ```
@@ -92,7 +92,7 @@ Den batteries like `den.provides.define-user` and `den.provides.primary-user` wo
   inputs.nixpkgs = "github:nixos/nixpkgs/nixpkgs-unstable";
   inputs.darwin = "github:nix-darwin/nix-darwin";
 +  inputs.import-tree.url = "github:vic/import-tree";
-+  inputs.den.url = "github:vic/den";
++  inputs.den.url = "github:denful/den";
   
   outputs = inputs: 
   let
@@ -154,7 +154,7 @@ you can have a flake like this:
   inputs.nixpkgs = "github:nixos/nixpkgs/nixpkgs-unstable";
   inputs.darwin = "github:nix-darwin/nix-darwin";
   inputs.import-tree.url = "github:vic/import-tree";
-  inputs.den.url = "github:vic/den";
+  inputs.den.url = "github:denful/den";
   
   outputs = inputs: 
   let
@@ -182,7 +182,7 @@ Even more, if you have defined all flake outputs as Dendritic
   inputs.nixpkgs = "github:nixos/nixpkgs/nixpkgs-unstable";
   inputs.darwin = "github:nix-darwin/nix-darwin";
   inputs.import-tree.url = "github:vic/import-tree";
-  inputs.den.url = "github:vic/den";
+  inputs.den.url = "github:denful/den";
   
   outputs = inputs: 
    (inputs.nixpkgs.lib.evalModules {
@@ -205,6 +205,6 @@ You can now head over to other guides or the reference:
 
 - [den.schema](/reference/schema)
 - [den.aspects](/reference/aspects)
-- [den.ctx](/reference/ctx)
+- [den.policies](/reference/policies)
 - [den.provides](/reference/batteries)
 

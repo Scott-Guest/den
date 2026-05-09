@@ -24,7 +24,11 @@
             )
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -36,12 +40,12 @@
         } comp;
       in
       {
-        expr = (builtins.head result.value.includes).nixos.networking.hostName;
+        expr = (builtins.head (builtins.head result.value).includes).nixos.networking.hostName;
         expected = "igloo";
       }
     );
 
-    # Attrset-with-functor parametric child — explicit __functionArgs with host.
+    # Attrset-with-fn parametric child — explicit __args with host.
     test-attrset-functor-host = denTest (
       { den, ... }:
       let
@@ -49,16 +53,14 @@
         child = {
           name = "child";
           meta = { };
-          __functor =
-            _:
+          __fn =
             { host }:
             {
               nixos.networking.hostName = host;
             };
-          __functionArgs = {
+          __args = {
             host = false;
           };
-          includes = [ ];
         };
         parent = {
           name = "parent";
@@ -66,7 +68,11 @@
           nixos = { };
           includes = [ child ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
             class = "nixos";
@@ -78,7 +84,7 @@
         } comp;
       in
       {
-        expr = (builtins.head result.value.includes).nixos.networking.hostName;
+        expr = (builtins.head (builtins.head result.value).includes).nixos.networking.hostName;
         expected = "igloo";
       }
     );
@@ -107,7 +113,11 @@
         wrapped = parametric.fixedTo {
           host = "igloo";
         } innerAspect;
-        comp = den.lib.aspects.fx.aspect.aspectToEffect wrapped;
+        comp = fx.send "resolve" {
+          aspect = wrapped;
+          identity = den.lib.aspects.fx.identity.key wrapped;
+          ctx = { };
+        };
         # Provide host in ctx so the pipeline has a handler for it.
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.defaultHandlers {
@@ -120,7 +130,16 @@
         } comp;
       in
       {
-        expr = builtins.length (result.state.imports null) > 0;
+        expr =
+          builtins.length (
+            (builtins.foldl' (
+              acc: sd:
+              lib.zipAttrsWith (_: builtins.concatLists) [
+                acc
+                sd
+              ]
+            ) { } (builtins.attrValues (result.state.scopedClassImports null))).user or [ ]
+          ) > 0;
         expected = true;
       }
     );

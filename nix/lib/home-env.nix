@@ -5,12 +5,10 @@
   ...
 }:
 let
-  atPath = path: obj: lib.attrByPath path { } obj;
-
   host-has-user-with-class =
     host: class: builtins.any (user: lib.elem class user.classes) (lib.attrValues host.users);
 
-  detectHost =
+  mkDetectHost =
     {
       className,
       supportedOses ? [
@@ -19,13 +17,20 @@ let
       ],
       optionPath,
     }:
-    { host }:
+    { host, ... }:
     let
       isOsSupported = builtins.elem host.class supportedOses;
-      isEnabled = (atPath (lib.splitString "." optionPath) host).enable or false;
-      shouldActivate = isEnabled && isOsSupported && host-has-user-with-class host className;
+      isEnabled = (host.${optionPath} or { }).enable or false;
+      hostHasClass = host-has-user-with-class host className;
     in
-    lib.optional shouldActivate { inherit host; };
+    isEnabled && isOsSupported && hostHasClass;
+
+  mkIntoClassUsers =
+    className:
+    { host, ... }:
+    map (user: { inherit host user; }) (
+      lib.filter (u: lib.elem className u.classes) (lib.attrValues host.users)
+    );
 
   hostOptions =
     {
@@ -49,39 +54,9 @@ let
       };
     };
 
-  intoClassUsers =
-    className:
-    { host }:
-    map (user: { inherit host user; }) (
-      lib.filter (u: lib.elem className u.classes) (lib.attrValues host.users)
-    );
-
-  userEnvAspect =
-    ctxName:
-    { host, user }:
-    { class, aspect-chain }:
-    {
-      includes = [
-        (den.ctx."${ctxName}-user" { inherit host user; })
-        (den.ctx.user { inherit host user; })
-      ];
-    };
-
-  forwardToHost =
-    {
-      className,
-      ctxName,
-      forwardPathFn,
-    }:
-    { host, user }:
-    den.provides.forward {
-      each = lib.singleton true;
-      fromClass = _: className;
-      intoClass = _: host.class;
-      intoPath = _: forwardPathFn { inherit host user; };
-      fromAspect = _: userEnvAspect ctxName { inherit host user; };
-    };
-
+  # Self-contained battery: host → user routing via aspect-included policy.
+  # The battery is an aspect with policies — include it in den.schema.host.includes
+  # and its policy fires during host resolution without separate den.policies registration.
   makeHomeEnv =
     {
       className,
@@ -94,22 +69,65 @@ let
       getModule,
       forwardPathFn,
     }:
-    {
-      ctx = {
-        host.into."${ctxName}-host" = detectHost { inherit className supportedOses optionPath; };
-
-        "${ctxName}-host" = {
-          provides."${ctxName}-host" =
-            { host }:
+    let
+      # Keyed module wrapper: the NixOS module system deduplicates imports
+      # with the same `key`, so this fires once even when included from
+      # multiple user entity resolves.
+      hostModule =
+        { host }:
+        {
+          ${host.class}.imports = [
             {
-              ${host.class}.imports = [ host.${optionPath}.module ];
-            };
-          into."${ctxName}-user" = intoClassUsers className;
+              key = "den:${optionPath}-host-module";
+              imports = [ host.${optionPath}.module ];
+            }
+          ];
         };
 
-        "${ctxName}-user".provides."${ctxName}-user" = forwardToHost {
-          inherit className ctxName forwardPathFn;
+      userForward =
+        { host, user }:
+        den.provides.forward {
+          each = lib.singleton true;
+          fromClass = _: className;
+          intoClass = _: host.class;
+          intoPath = _: forwardPathFn { inherit host user; };
+          fromAspect = _: den.lib.resolveEntity "user" { inherit host user; };
         };
+
+      policyFn =
+        { host, ... }:
+        let
+          enabled = mkDetectHost {
+            inherit className supportedOses optionPath;
+          } { inherit host; };
+        in
+        if !enabled then
+          [ ]
+        else
+          let
+            pairs = mkIntoClassUsers className { inherit host; };
+            resolves = map (
+              pair: den.lib.policy.resolve.withIncludes [ userForward ] { user = pair.user; }
+            ) pairs;
+            rootIncludes = [
+              (den.lib.policy.include hostModule)
+            ]
+            ++ lib.optional (den.aspects ? os-user-class-fwd) (
+              den.lib.policy.include den.aspects.os-user-class-fwd
+            );
+          in
+          resolves ++ rootIncludes;
+    in
+    {
+      battery = {
+        policies."host-to-${ctxName}-users" = policyFn;
+        includes = [
+          {
+            __isPolicy = true;
+            name = "host-to-${ctxName}-users";
+            fn = policyFn;
+          }
+        ];
       };
 
       hostConf = hostOptions {
@@ -119,9 +137,10 @@ let
           getModule
           ;
       };
+
     };
 
 in
 {
-  inherit makeHomeEnv;
+  inherit makeHomeEnv mkDetectHost mkIntoClassUsers;
 }

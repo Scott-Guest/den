@@ -18,16 +18,17 @@
         };
       in
       {
-        den.ctx.start = {
-          _.start =
+        den.schema.start.includes = [
+          (
             { level }:
             {
               funny.names = [ level ];
-            };
-          includes = [ top ];
-        };
+            }
+          )
+          top
+        ];
 
-        expr = builtins.length (funnyNames (den.ctx.start { level = "deep"; }));
+        expr = builtins.length (funnyNames (den.lib.resolveEntity "start" { level = "deep"; }));
         expected = 42;
       }
     );
@@ -41,9 +42,9 @@
             funny.names = [ "p${toString i}" ];
             includes = [
               (
-                { host, ... }:
+                { tag, ... }:
                 {
-                  funny.names = [ "i${toString i}-${host}" ];
+                  funny.names = [ "i${toString i}-${tag}" ];
                 }
               )
             ];
@@ -51,16 +52,17 @@
         aspects = lib.genList mkParam 30;
       in
       {
-        den.ctx.start = {
-          _.start =
-            { host }:
+        den.schema.start.includes = [
+          (
+            { tag }:
             {
-              funny.names = [ host ];
-            };
-          includes = aspects;
-        };
+              funny.names = [ tag ];
+            }
+          )
+        ]
+        ++ aspects;
 
-        expr = builtins.length (funnyNames (den.ctx.start { host = "h"; }));
+        expr = builtins.length (funnyNames (den.lib.resolveEntity "start" { tag = "h"; }));
         expected = 61;
       }
     );
@@ -69,9 +71,9 @@
       { den, funnyNames, ... }:
       let
         inner =
-          { host, planet, ... }:
+          { tag, planet, ... }:
           {
-            funny.names = [ "${host}-${planet}" ];
+            funny.names = [ "${tag}-${planet}" ];
           };
         expanded = den.lib.parametric.expands { planet = "mars"; } {
           funny.names = [ "exp" ];
@@ -79,16 +81,17 @@
         };
       in
       {
-        den.ctx.start = {
-          _.start =
-            { host }:
+        den.schema.start.includes = [
+          (
+            { tag }:
             {
-              funny.names = [ host ];
-            };
-          includes = [ expanded ];
-        };
+              funny.names = [ tag ];
+            }
+          )
+          expanded
+        ];
 
-        expr = builtins.length (funnyNames (den.ctx.start { host = "h"; }));
+        expr = builtins.length (funnyNames (den.lib.resolveEntity "start" { tag = "h"; }));
         expected = 17;
       }
     );
@@ -100,34 +103,42 @@
           funny.names = [ "shared" ];
           includes = [
             (
-              { host, ... }:
+              { tag, ... }:
               {
-                funny.names = [ "inner-${host}" ];
+                funny.names = [ "inner-${tag}" ];
               }
             )
           ];
         };
       in
       {
-        den.ctx.a = {
-          _.a =
-            { host }:
+        den.schema.b.includes = [ ];
+        den.policies.a-to-b =
+          { tag, ... }:
+          let
+            inherit (den.lib.policy) resolve include;
+          in
+          [
+            (resolve.to "b" { tag = "${tag}!"; })
+            (include (
+              { tag }:
+              {
+                funny.names = [ "b-${tag}" ];
+              }
+            ))
+            (include shared)
+          ];
+        den.schema.a.includes = [
+          den.policies.a-to-b
+          (
+            { tag }:
             {
-              funny.names = [ "a-${host}" ];
-            };
-          into.b = { host }: [ { host = "${host}!"; } ];
-          includes = [ shared ];
-        };
-        den.ctx.b = {
-          _.b =
-            { host }:
-            {
-              funny.names = [ "b-${host}" ];
-            };
-          includes = [ shared ];
-        };
-
-        expr = builtins.length (funnyNames (den.ctx.a { host = "v"; }));
+              funny.names = [ "a-${tag}" ];
+            }
+          )
+          shared
+        ];
+        expr = builtins.length (funnyNames (den.lib.resolveEntity "a" { tag = "v"; }));
         expected = 6;
       }
     );

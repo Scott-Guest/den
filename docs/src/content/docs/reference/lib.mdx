@@ -1,140 +1,13 @@
 ---
 title: den.lib
-description: Library functions for parametric dispatch, argument introspection, and aspect manipulation.
+description: Library functions for aspect resolution, angle brackets, and policy inspection.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="Source" icon="github">
-[`nix/lib.nix`](https://github.com/vic/den/blob/main/nix/lib.nix) --
-[`nix/fn-can-take.nix`](https://github.com/vic/den/blob/main/nix/fn-can-take.nix)
+[`nix/lib/default.nix`](https://github.com/denful/den/blob/main/nix/lib/default.nix)
 </Aside>
-
-## `den.lib.parametric`
-
-Wraps an aspect with a `__functor` that filters `includes` by argument compatibility.
-
-```nix
-den.lib.parametric { nixos.x = 1; includes = [ ... ]; }
-```
-
-Default uses `atLeast` matching.
-
-### `den.lib.parametric.atLeast`
-
-Same as `parametric`. Functions match if all required params are present.
-
-### `den.lib.parametric.exactly`
-
-Functions match only if required params exactly equal provided params.
-
-```nix
-den.lib.parametric.exactly { includes = [ ({ host }: ...) ]; }
-```
-
-### `den.lib.parametric.fixedTo`
-
-Calls the aspect with a fixed context, ignoring the actual context:
-
-```nix
-den.lib.parametric.fixedTo { host = myHost; } someAspect
-```
-
-### `den.lib.parametric.expands`
-
-Extends the received context with additional attributes before dispatch:
-
-```nix
-den.lib.parametric.expands { extra = true; } someAspect
-```
-
-### `den.lib.parametric.withOwn`
-
-Low-level constructor. Takes a `functor: self -> ctx -> aspect` and wraps
-an aspect so that owned configs and statics are included at the static
-stage, and the functor runs at the parametric stage.
-
-## `den.lib.canTake`
-
-Function argument introspection.
-
-### `den.lib.canTake params fn`
-
-Returns `true` if `fn`'s required arguments are satisfied by `params` (atLeast).
-
-### `den.lib.canTake.atLeast params fn`
-
-Same as `canTake`.
-
-### `den.lib.canTake.exactly params fn`
-
-Returns `true` only if `fn`'s required arguments exactly match `params`.
-
-## `den.lib.take`
-
-Conditional function application.
-
-### `den.lib.take.atLeast fn ctx`
-
-Calls `fn ctx` if `canTake.atLeast ctx fn`, otherwise returns `{}`.
-
-### `den.lib.take.exactly fn ctx`
-
-Calls `fn ctx` if `canTake.exactly ctx fn`, otherwise returns `{}`.
-
-### `den.lib.take.unused`
-
-`_unused: used: used` -- ignores first argument, returns second. Used for
-discarding `aspect-chain` in `import-tree`.
-
-## Context Shortcuts
-
-These helpers are shortcuts built with `den.lib.take.exactly` and
-`den.lib.parametric.fixedTo`:
-
-### `den.lib.perHost aspect`
-
-Run `aspect` only in `{ host }` contexts.
-
-### `den.lib.perUser aspect`
-
-Run `aspect` only in `{ host, user }` contexts.
-
-### `den.lib.perHome aspect`
-
-Run `aspect` only in `{ home }` contexts.
-
-## `den.lib.statics`
-
-Extracts only static includes from an aspect (non-function includes):
-
-```nix
-den.lib.statics someAspect { class = "nixos"; aspect-chain = []; }
-```
-
-## `den.lib.owned`
-
-Extracts owned configs from an aspect (removes `includes`, `__functor`):
-
-```nix
-den.lib.owned someAspect
-```
-
-## `den.lib.isFn`
-
-Returns `true` if the value is a function or has `__functor`:
-
-```nix
-den.lib.isFn myValue
-```
-
-## `den.lib.isStatic`
-
-Returns `true` if the function can take `{ class, aspect-chain }`:
-
-```nix
-den.lib.isStatic myFn
-```
 
 ## `den.lib.__findFile`
 
@@ -146,31 +19,138 @@ _module.args.__findFile = den.lib.__findFile;
 
 ## `den.lib.aspects`
 
-Den aspects API. Provides aspect type definitions, `resolve`,
-`resolve.withAdapter`, and composable `adapters`.
+Den aspects API. Provides aspect type definitions and internal resolution helpers.
 
 ### `den.lib.aspects.resolve class aspect`
 
-Resolves an aspect for a given class (e.g., `"nixos"`), returning a
-module with `imports`. Uses `adapters.default` which honors
-`meta.adapter` on aspects.
+**Internal.** Resolves an aspect for a given class (e.g., `"nixos"`), returning a
+module with `imports`. Runs the full pipeline including entity instantiation.
 
-### `den.lib.aspects.resolve.withAdapter adapter class aspect`
+### `den.lib.aspects.resolveImports class aspect`
 
-Resolves with a custom adapter instead of the default.
+**Internal.** Like `resolve` but skips entity instantiation (phase 4).
+Use for nested resolution where only class imports are needed, such as
+extracting `homeManager` modules from a host's aspect tree.
 
-### `den.lib.aspects.adapters`
+## `den.lib.policy`
 
-Composable adapters for `resolve.withAdapter`. Each adapter receives
-`{ aspect, class, classModule, recurse, aspect-chain, resolveChild }`
-and returns the resolved result.
+Policy effect constructors. See [den.policies reference](/reference/policies/)
+for the full API.
 
-| Adapter | Description |
-|---------|-------------|
-| `module` | Collects class modules and recurses on includes |
-| `default` | `filterIncludes module` — the default pipeline |
-| `filter pred adapter` | Returns `{}` if `pred aspect` is false |
-| `map f adapter` | Transforms the adapter's result with `f` |
-| `mapAspect f adapter` | Transforms the aspect before passing to adapter |
-| `mapIncludes f adapter` | Transforms each include before recursion |
-| `filterIncludes adapter` | Honors `meta.adapter`, filters empty includes, tags survivors for propagation |
+### `den.lib.policy.resolve`, `.include`, `.exclude`, `.route`, `.provide`, `.instantiate`
+
+Policy effect constructors used inside policy functions. See
+[den.policies reference](/reference/policies/#policy-effects).
+
+### `den.lib.policy.pipe`
+
+Pipe builder API for quirk data routing. See
+[den.quirks reference](/reference/quirks/#pipe-builder-api).
+
+### `den.lib.policy.mkPolicy name fn`
+
+Create a named policy record for use in `includes` lists.
+See [Policies reference](/reference/policies/#denlibpolicymkpolicy-name-fn).
+
+### `den.lib.policy.for entity policyOrList`
+
+Conditional policy wrapper — fires only for a specific entity.
+See [Policies](/explanation/policies/#conditional-policies).
+
+### `den.lib.policy.when predicate policyOrList`
+
+Conditional policy wrapper — fires only when predicate returns true.
+See [Policies](/explanation/policies/#conditional-policies).
+
+## `den.lib.policyInspect`
+
+### `den.lib.policyInspect.inspect { kind, context }`
+
+Lightweight policy inspection utility. Calls resolve functions directly
+without running the full pipeline. Returns matching policies with their
+targets and routing type.
+
+See [den.policies reference](/reference/policies/#denlibpolicyinspectinspect)
+for full documentation.
+
+## `den.lib.nh`
+
+<Aside title="Source" icon="github">
+[`nix/lib/nh.nix`](https://github.com/denful/den/blob/main/nix/lib/nh.nix)
+</Aside>
+
+Generates [nh](https://github.com/viperML/nh) wrapper scripts for each
+host and home in your fleet. Each wrapper is a shell application that
+calls `nh os`, `nh darwin`, or `nh home` with the correct flake
+attribute, so you can build/switch with `nix run .#<hostname>`.
+
+### `den.lib.nh.denPackages args pkgs`
+
+Returns an attrset of all host and home wrapper packages, suitable for
+`perSystem.packages`:
+
+```nix
+perSystem = { pkgs, ... }: {
+  packages = den.lib.nh.denPackages { fromFlake = true; } pkgs;
+};
+```
+
+### `den.lib.nh.denShell args pkgs`
+
+Returns a `mkShell` with `nh` and all wrapper scripts on `PATH`:
+
+```nix
+# Non-flake usage
+options.den.sh = lib.mkOption {
+  default = den.lib.nh.denShell {
+    fromFlake = false;
+    outPrefix = [ "flake" ];
+  } pkgs;
+};
+```
+
+### `den.lib.nh.denApps args pkgs`
+
+Returns a list of all wrapper derivations (hosts + homes).
+
+### `den.lib.nh.hostApps args pkgs`
+
+Returns a list of host-only wrapper derivations.
+
+### `den.lib.nh.homeApps args pkgs`
+
+Returns a list of home-only wrapper derivations.
+
+### Args
+
+All functions take an `args` attrset:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `fromFlake` | `bool` | `true` | Use flake ref (`path#attr`) or file ref (`--file path attr`) |
+| `fromPath` | `str` | `"."` | Flake path or file path |
+| `outPrefix` | `list` | `[]` | Prefix prepended to the output attribute path |
+| `defaultAction` | `build` | `str` | The default action to perform if no args are provided |
+| `defaultArgs` | `[]` | `[str]` | Additional default args to add to each invocation, e.g., `--print-build-logs` |
+
+### Usage
+
+After adding `denPackages` to your `perSystem.packages`:
+
+```console
+# Build igloo via nh (defaults to "build" action)
+$ nix run .#igloo
+
+# Switch igloo via nh
+$ nix run .#igloo -- switch
+
+# Any nh flags work
+$ nix run .#igloo -- switch --dry
+```
+
+## Deprecated functions
+
+Several `den.lib` functions are deprecated — the pipeline now handles
+parametric dispatch and class module wrapping automatically. See
+[Deprecated den.lib functions](/reference/lib-deprecated/) for the full
+listing.

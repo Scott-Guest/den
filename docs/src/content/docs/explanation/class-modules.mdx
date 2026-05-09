@@ -1,0 +1,192 @@
+---
+title: Class Modules
+description: Flat-form class modules with automatic den context injection.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside title="Source" icon="github">
+[`nix/lib/aspects/fx/aspect.nix`](https://github.com/denful/den/blob/main/nix/lib/aspects/fx/aspect.nix)
+</Aside>
+
+## Context args in class modules
+
+Den aspects can be written as functions that receive context arguments (`{ host }`, `{ host, user }`, etc.). The two-layer form works and is perfectly valid:
+
+```nix
+# Two-layer form
+{ host }: {
+  nixos = { config, pkgs, ... }: {
+    networking.hostName = host.name;
+  };
+}
+```
+
+As a convenience, you can also write class modules in **flat form**, mixing context args and module-system args in a single function:
+
+```nix
+# Flat form -- context args and module-system args side by side
+{
+  nixos = { host, config, pkgs, ... }: {
+    networking.hostName = host.name;
+  };
+}
+```
+
+The pipeline inspects `builtins.functionArgs`, identifies which args exist in the current context, pre-applies those values, and advertises only the remaining args to the module system via `lib.setFunctionArgs`. The module never knows it was wrapped.
+
+## How It Works
+
+1. `builtins.functionArgs module` returns the full set of declared args.
+2. Each arg name is checked against the current context: a key is a context arg if it exists in the pipeline state.
+3. Context args are pre-applied. The remaining args are advertised to the module system.
+4. At call time, the wrapper merges the module-system args with the pre-applied context args and calls the original function.
+
+## Usage Examples
+
+### Basic flat form
+
+A static aspect whose `nixos` class module requests `host` directly:
+
+```nix
+{
+  den.aspects.my-aspect = {
+    nixos = { host, config, ... }: {
+      networking.hostName = host.name;
+    };
+  };
+}
+```
+
+### Multiple context args
+
+Request both `host` and `user` when a policy provides both in context:
+
+```nix
+{
+  nixos = { host, user, config, ... }: {
+    users.users.${user.name}.description = "${host.name}/${user.name}";
+  };
+}
+```
+
+### Home-manager with context args
+
+Both `home` and `user` come from context:
+
+```nix
+{
+  homeManager = { user, config, ... }: {
+    home.username = user.name;
+  };
+}
+```
+
+### Full application
+
+When **all** function args are context args (no module-system args at all), the function is called directly and its return value becomes the class module. This handles the pattern where a function returns another function:
+
+```nix
+{
+  nixos = { host }: { config, ... }: {
+    networking.hostName = host.name;
+  };
+}
+```
+
+Here `{ host }` has no `...` and no module-system args. The pipeline calls it with `{ host = ctx.host; }` and uses the returned function as the class module.
+
+### Static aspect with flat form
+
+No outer parametric wrapper needed -- context flows through the pipeline's scope handlers:
+
+```nix
+{
+  den.aspects.static-networking = {
+    nixos = { host, config, ... }: {
+      networking.hostName = host.name;
+    };
+  };
+}
+```
+
+## The Ellipsis Convention
+
+<Aside type="caution">
+Flat-form class modules **must** include `...` in their argument pattern.
+</Aside>
+
+The NixOS module system passes extra args (`config`, `options`, `lib`, `pkgs`, `modulesPath`, and anything from `specialArgs` or `_module.args`) to every module function. Without `...`, the module system's extra args cause an eval error. This is already conventional for NixOS modules, but worth noting since the flat form makes it easy to forget.
+
+The exception is **full application** -- if every arg is a context arg (e.g., `{ host }:`), the function is called directly by Den and never reaches the module system, so `...` is not needed.
+
+Note that for aspect-level context functions (the outer wrapper), `...` is not needed and should be omitted -- these receive only the context args they declare.
+
+## Collision Handling
+
+A collision occurs when den wants to inject an arg (e.g., `host`) but the module system also provides a value for the same name -- via `specialArgs` or `_module.args`. By default, this throws an error to force an explicit resolution.
+
+### Resolution levels
+
+Collision strategy is resolved from three levels (first match wins):
+
+| Level | Where to set | Scope |
+|---|---|---|
+| Aspect | `meta.collisionPolicy` on the aspect | All class modules in that aspect |
+| Entity | `collisionPolicy` on the entity schema (`den.schema.host`) | All uses of that entity kind |
+| Global | `den.config.classModuleCollisionPolicy` | Entire flake (default: `"error"`) |
+
+### Strategy values
+
+| Value | Behavior |
+|---|---|
+| `"error"` | Throw an eval error (default) |
+| `"den-wins"` | Den value takes precedence; `lib.warn` emitted |
+| `"class-wins"` | Module-system value takes precedence; `lib.warn` emitted |
+
+### Setting collision strategy
+
+```nix
+# Aspect level
+den.aspects.my-aspect.meta.collisionPolicy = "den-wins";
+
+# Entity level (all hosts)
+den.schema.host.collisionPolicy = "den-wins";
+
+# Global
+den.config.classModuleCollisionPolicy = "den-wins";
+```
+
+## Unsatisfied args
+
+When a class module requires an entity arg that isn't in the current
+context (e.g., `{ user, config, ... }` at a host scope where no `user`
+exists), the module is **silently skipped**. A trace message is emitted
+but no error is raised.
+
+This is by design — it lets you write a single aspect with class modules
+that target different scopes:
+
+```nix
+den.aspects.my-aspect = {
+  # Applied at host scope (host is always present)
+  nixos = { host, config, ... }: {
+    networking.hostName = host.name;
+  };
+
+  # Applied only at user scope (skipped at host scope)
+  homeManager = { user, config, ... }: {
+    home.username = user.userName;
+  };
+};
+```
+
+If your class module isn't taking effect, check whether all its entity
+args are in context at the scope where it's being resolved.
+
+## See Also
+
+- [Aspects & Functors](/explanation/aspects) -- how aspects work and the `__functor` pattern
+- [Context-Aware Aspects](/explanation/parametric) -- shape-based dispatch and the `canTake` mechanism
+- [Context Pipeline](/explanation/context-pipeline) -- how context flows through the resolution pipeline
+- [Entity Policies](/explanation/policies) -- how policies dispatch context to entity kinds

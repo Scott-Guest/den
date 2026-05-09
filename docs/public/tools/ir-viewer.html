@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Den IR Viewer</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/@xyflow/react@12.0.0/dist/style.css" />
+
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #111827;
+      overflow: hidden;
+    }
+    #root { height: 100%; width: 100%; }
+
+    .control-panel {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      z-index: 5;
+      background: #1f2937;
+      color: #f3f4f6;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 380px;
+      max-height: calc(100vh - 30px);
+      overflow-y: auto;
+    }
+    .tabs { display: flex; gap: 4px; }
+    .tab {
+      padding: 6px 12px;
+      border-radius: 4px 4px 0 0;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: bold;
+      border: 1px solid #4b5563;
+      border-bottom: none;
+    }
+    .tab.active { background: #374151; color: #f3f4f6; }
+    .tab:not(.active) { background: #1f2937; color: #9ca3af; }
+    textarea {
+      width: 100%;
+      height: 200px;
+      font-family: monospace;
+      font-size: 11px;
+      padding: 8px;
+      box-sizing: border-box;
+      background: #374151;
+      color: #e5e7eb;
+      border: 1px solid #4b5563;
+      border-radius: 4px;
+      resize: vertical;
+      white-space: pre;
+    }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+    button:hover { background: #2563eb; }
+    button.secondary { background: #4b5563; }
+    button.secondary:hover { background: #6b7280; }
+    .error {
+      color: #fca5a5;
+      font-size: 12px;
+      background: #7f1d1d;
+      padding: 4px;
+      border-radius: 4px;
+    }
+    .stats {
+      font-size: 11px;
+      color: #9ca3af;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .stats span { color: #e5e7eb; font-weight: bold; }
+    .filter-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .filter-chip {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      cursor: pointer;
+      border: 1px solid #4b5563;
+      transition: all 0.15s;
+    }
+    .filter-chip.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+    .filter-chip:not(.active) { background: transparent; color: #9ca3af; }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 10px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 4px; }
+    .legend-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .pipe-info {
+      font-size: 11px;
+      background: #374151;
+      padding: 8px;
+      border-radius: 4px;
+    }
+    .pipe-info h4 { margin: 0 0 4px 0; color: #f3f4f6; font-size: 12px; }
+    .pipe-info .flow { color: #10b981; }
+    .pipe-info .producer { color: #60a5fa; }
+    .drop-zone {
+      border: 2px dashed #4b5563;
+      border-radius: 4px;
+      padding: 12px;
+      text-align: center;
+      color: #9ca3af;
+      font-size: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .drop-zone.dragover { border-color: #3b82f6; color: #60a5fa; }
+    .react-flow__node:not(.react-flow__node-group) {
+      font-family: monospace;
+      font-size: 11px;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .react-flow__edge:hover .react-flow__edge-path {
+      stroke-width: 3.5 !important;
+      filter: brightness(1.4);
+    }
+    .react-flow__edge.highlighted .react-flow__edge-path {
+      stroke-width: 3.5 !important;
+      filter: brightness(1.5) drop-shadow(0 0 4px currentColor);
+    }
+    .react-flow__edge.dimmed .react-flow__edge-path {
+      opacity: 0.15;
+    }
+    .react-flow__edge.dimmed .react-flow__edge-text,
+    .react-flow__edge.dimmed .react-flow__edge-textbg {
+      opacity: 0.15;
+    }
+    .react-flow__node.dimmed {
+      opacity: 0.3;
+    }
+    .react-flow__node-group {
+      z-index: -1 !important;
+    }
+    .react-flow__node-group > div {
+      position: absolute;
+      top: 8px;
+      left: 12px;
+      pointer-events: none;
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.3.1",
+        "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
+        "react-dom": "https://esm.sh/react-dom@18.3.1",
+        "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+        "@xyflow/react": "https://esm.sh/@xyflow/react@12.0.0?external=react,react-dom",
+        "elkjs/lib/elk.bundled.js": "https://esm.sh/elkjs@0.9.3/lib/elk.bundled.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/@babel/standalone@7.24.0/babel.min.js"></script>
+
+  <script type="text/babel" data-type="module">
+    import React, { useState, useCallback, useRef } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { ReactFlow, MiniMap, Controls, Background, useNodesState, useEdgesState } from '@xyflow/react';
+    import ELK from 'elkjs/lib/elk.bundled.js';
+
+    const elk = new ELK();
+
+    // --- Color palettes ---
+
+    const nodeStyles = {
+      default:  { bg: '#e2e8f0', border: '#64748b', color: '#1e293b' },
+      adapter:  { bg: '#dbeafe', border: '#3b82f6', color: '#1e3a5f' },
+      excluded: { bg: '#fee2e2', border: '#dc2626', color: '#7f1d1d' },
+      replaced: { bg: '#fef3c7', border: '#d97706', color: '#78350f' },
+      terminal: { bg: '#e0f2fe', border: '#0284c7', color: '#0c4a6e' },
+      policy:   { bg: '#fef08a', border: '#ca8a04', color: '#713f12' },
+    };
+
+    const hostPalette = [
+      '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b',
+      '#ef4444', '#06b6d4', '#ec4899', '#84cc16',
+    ];
+
+    const edgeStyleMap = {
+      normal:   { stroke: '#94a3b8', dash: 'none',  animated: false },
+      provide:  { stroke: '#10b981', dash: 'none',  animated: true },
+      policy:   { stroke: '#ca8a04', dash: '5 5',   animated: false },
+      excluded: { stroke: '#fca5a5', dash: '8 4',   animated: false },
+      replaced: { stroke: '#d97706', dash: '5 5',   animated: false },
+      pipe:     { stroke: '#a78bfa', dash: 'none',  animated: true },
+    };
+
+    // --- Detect IR type ---
+    const isFleetIR = (data) => !!data.scopes;
+
+    // --- Build host color map ---
+    const buildHostColors = (data) => {
+      const map = {};
+      if (isFleetIR(data)) {
+        const hosts = (data.scopes || []).filter(s => s.kind === 'host');
+        hosts.forEach((h, i) => { map[h.name] = hostPalette[i % hostPalette.length]; });
+      } else {
+        const instances = data.entityInstances || [];
+        instances.forEach((inst, i) => {
+          const key = inst.kind === inst.name ? inst.name : inst.kind + ':' + inst.name;
+          map[key] = hostPalette[i % hostPalette.length] + '80';
+        });
+      }
+      return map;
+    };
+
+    // --- Transform fleet IR ---
+    const transformFleetIR = (data, filters, collapsedScopes = new Set()) => {
+      const direction = data.direction || 'LR';
+      const sourcePosition = direction === 'LR' ? 'right' : 'bottom';
+      const targetPosition = direction === 'LR' ? 'left' : 'top';
+      const hostColors = buildHostColors(data);
+
+      // Filter nodes by host if filters active
+      const activeHosts = Object.keys(filters.hosts || {}).filter(h => filters.hosts[h]);
+      const showAll = activeHosts.length === 0 || activeHosts.length === Object.keys(filters.hosts).length;
+
+      // Build scope→host mapping: which scope IDs map to which host name.
+      // A scope is "collapsed" if it or any ancestor is in collapsedScopes.
+      const scopeById = {};
+      (data.scopes || []).forEach(s => { scopeById[s.id] = s; });
+
+      const isScopeCollapsed = (scopeId) => {
+        let cur = scopeId;
+        while (cur) {
+          if (collapsedScopes.has(cur)) return true;
+          const scope = scopeById[cur];
+          cur = scope?.parent || null;
+        }
+        return false;
+      };
+
+      // For each scope node, find its host-level scope (for rerouting)
+      const scopeNodeToHost = {};
+      (data.scopes || []).forEach(s => {
+        if (s.kind === 'host') scopeNodeToHost[s.id] = s.id;
+        else {
+          // Walk up to find enclosing host scope, or stay at this scope
+          let cur = s.id;
+          while (cur) {
+            const sc = scopeById[cur];
+            if (sc?.kind === 'host') { scopeNodeToHost[s.id] = cur; break; }
+            cur = sc?.parent || null;
+          }
+        }
+      });
+
+      // Map scope node IDs by kind+host for rerouting
+      const hostScopeNodes = {}; // hostName -> scope node id
+      const userScopeNodes = {}; // "hostName:userName" -> scope node id
+      (data.nodes || []).forEach(n => {
+        if (!n.isScope) return;
+        const scope = (data.scopes || []).find(s => s.id === n.scope);
+        if (scope?.kind === 'host') hostScopeNodes[scope.name] = n.id;
+        if (scope?.kind === 'user') {
+          // Find enclosing host
+          let cur = scope.parent;
+          while (cur) {
+            const parent = scopeById[cur];
+            if (parent?.kind === 'host') {
+              userScopeNodes[parent.name + ':' + scope.name] = n.id;
+              break;
+            }
+            cur = parent?.parent || null;
+          }
+        }
+      });
+
+      // Count hidden nodes per scope node (for badge)
+      const hiddenCountByScope = {};
+
+      const filteredNodes = (data.nodes || []).filter(n => {
+        if (!showAll && n.host && !filters.hosts[n.host]) return false;
+        if (!filters.showPolicies && n.isPolicyDispatch) return false;
+        if (!filters.showProviders && n.isProvider) return false;
+
+        if (!n.isScope && n.host) {
+          // Check host-level collapse first (hides everything)
+          const hostScope = (data.scopes || []).find(s => s.kind === 'host' && s.name === n.host);
+          if (hostScope && isScopeCollapsed(hostScope.id)) {
+            hiddenCountByScope[hostScopeNodes[n.host]] = (hiddenCountByScope[hostScopeNodes[n.host]] || 0) + 1;
+            return false;
+          }
+          // Check user-level collapse (hides only user-scoped aspects)
+          if (n.entityKind === 'user') {
+            const userName = n.entityInstance?.split(':')[1];
+            const userKey = n.host + ':' + userName;
+            const userScopeId = userScopeNodes[userKey];
+            if (userScopeId) {
+              const userScope = (data.nodes || []).find(nd => nd.id === userScopeId);
+              if (userScope && isScopeCollapsed(userScope.scope)) {
+                hiddenCountByScope[userScopeId] = (hiddenCountByScope[userScopeId] || 0) + 1;
+                return false;
+              }
+            }
+          }
+        }
+        // Collapse scope nodes whose parent scope is collapsed
+        if (n.isScope) {
+          const scope = (data.scopes || []).find(s => s.id === n.scope);
+          if (scope?.parent && isScopeCollapsed(scope.parent)) {
+            const parentScopeNode = (data.nodes || []).find(
+              pn => pn.isScope && pn.scope === scope.parent
+            );
+            if (parentScopeNode) {
+              hiddenCountByScope[parentScopeNode.id] = (hiddenCountByScope[parentScopeNode.id] || 0) + 1;
+            }
+            return false;
+          }
+        }
+        return true;
+      });
+
+      const nodeIdSet = new Set(filteredNodes.map(n => n.id));
+
+      const nodes = filteredNodes.map(n => {
+        const s = nodeStyles[n.style] || nodeStyles.default;
+        const hostColor = n.host ? hostColors[n.host] : null;
+        const pipeProduces = n.pipes?.produces || [];
+
+        let borderRadius = '4px';
+        if (n.shape === 'hexagon') borderRadius = '16px';
+        if (n.shape === 'trapezoid') borderRadius = '4px 4px 12px 12px';
+
+        let label = n.label || n.fullLabel || n.id;
+        const meta = [];
+        if (n.host) meta.push(n.host);
+        if (n.classes?.length) meta.push(n.classes.join('+'));
+        if (n.isPolicyDispatch) meta.push('policy');
+        if (pipeProduces.length) meta.push('pipe: ' + pipeProduces.join(', '));
+        if (n.isParametric && n.fnArgNames?.length) meta.push('(' + n.fnArgNames.join(', ') + ')');
+
+        // Badge for collapsed scope nodes
+        const hidden = hiddenCountByScope[n.id];
+        if (hidden) meta.push(`+${hidden} collapsed`);
+
+        if (meta.length) label += '\n' + meta.join(' | ');
+
+        // Scope nodes that are collapsed get a distinct style
+        const isCollapsedScope = n.isScope && collapsedScopes.has(n.scope);
+
+        return {
+          id: n.id,
+          sourcePosition,
+          targetPosition,
+          data: { label, isScope: !!n.isScope, scopeId: n.scope || null },
+          style: {
+            background: isCollapsedScope ? '#374151' : s.bg,
+            border: '2px solid ' + (isCollapsedScope ? '#60a5fa' : (hostColor || s.border)),
+            color: isCollapsedScope ? '#93c5fd' : s.color,
+            borderRadius: n.isScope ? '16px' : borderRadius,
+            width: 220,
+            cursor: n.isScope ? 'pointer' : 'default',
+            boxShadow: isCollapsedScope
+              ? '0 0 0 3px rgba(96,165,250,0.3), 0 2px 4px rgba(0,0,0,0.2)'
+              : hostColor
+                ? `0 0 0 3px ${hostColor}40, 0 2px 4px rgba(0,0,0,0.2)`
+                : '0 2px 4px rgba(0,0,0,0.2)',
+            whiteSpace: 'pre-line',
+            fontSize: '10px',
+            lineHeight: '1.3',
+          }
+        };
+      });
+
+      // Build reroute map: hidden node → nearest visible ancestor scope node
+      const rerouteMap = {};
+      (data.nodes || []).forEach(n => {
+        if (nodeIdSet.has(n.id)) return; // visible, no reroute needed
+        if (!n.isScope && n.host) {
+          // Try user scope first for user-scoped nodes, then host scope, then walk up
+          let target = null;
+          if (n.entityKind === 'user') {
+            const userName = n.entityInstance?.split(':')[1];
+            target = userScopeNodes[n.host + ':' + userName] || null;
+          }
+          if (!target || !nodeIdSet.has(target)) {
+            target = hostScopeNodes[n.host] || null;
+          }
+          while (target && !nodeIdSet.has(target)) {
+            const scope = (data.scopes || []).find(s => {
+              const sn = (data.nodes || []).find(nd => nd.id === target && nd.isScope);
+              return sn && s.id === sn.scope;
+            });
+            const parentScopeNode = scope?.parent
+              ? (data.nodes || []).find(nd => nd.isScope && nd.scope === scope.parent)
+              : null;
+            target = parentScopeNode?.id || null;
+          }
+          if (target) rerouteMap[n.id] = target;
+        } else if (n.isScope) {
+          // Hidden scope node: walk up to nearest visible scope
+          const scope = (data.scopes || []).find(s => s.id === n.scope);
+          let parentId = scope?.parent;
+          while (parentId) {
+            const parentNode = (data.nodes || []).find(nd => nd.isScope && nd.scope === parentId);
+            if (parentNode && nodeIdSet.has(parentNode.id)) {
+              rerouteMap[n.id] = parentNode.id;
+              break;
+            }
+            const ps = scopeById[parentId];
+            parentId = ps?.parent || null;
+          }
+        }
+      });
+
+      // Process edges: reroute edges from/to hidden nodes
+      const rawEdges = data.edges || [];
+      const seenEdgeKeys = new Set();
+      const edges = [];
+      rawEdges.forEach((e, idx) => {
+        let from = e.from;
+        let to = e.to;
+        if (!nodeIdSet.has(from)) from = rerouteMap[from] || from;
+        if (!nodeIdSet.has(to)) to = rerouteMap[to] || to;
+        // Skip if either endpoint still not visible, or self-loop
+        if (!nodeIdSet.has(from) || !nodeIdSet.has(to)) return;
+        if (from === to) return;
+        // Deduplicate rerouted edges
+        const edgeKey = from + '->' + to + ':' + (e.style || 'normal');
+        if (seenEdgeKeys.has(edgeKey)) return;
+        seenEdgeKeys.add(edgeKey);
+
+        const es = edgeStyleMap[e.style] || edgeStyleMap.normal;
+        edges.push({
+          id: 'e-' + from + '-' + to + '-' + idx,
+          source: from,
+          target: to,
+          label: e.label,
+          animated: es.animated,
+          type: 'smoothstep',
+          data: { edgeType: e.style || 'normal' },
+          style: { stroke: es.stroke, strokeDasharray: es.dash, strokeWidth: e.crossHost ? 2.5 : 1.5 },
+          labelStyle: { fill: '#e5e7eb', fontSize: '10px' },
+          labelBgStyle: { fill: '#1f2937', fillOpacity: 0.8 },
+        });
+      });
+
+      return { nodes, edges, direction, hostColors };
+    };
+
+    // --- Transform per-host IR (original format) ---
+    const transformHostIR = (data) => {
+      const direction = data.direction || 'LR';
+      const sourcePosition = direction === 'LR' ? 'right' : 'bottom';
+      const targetPosition = direction === 'LR' ? 'left' : 'top';
+      const hostColors = buildHostColors(data);
+
+      const nodes = (data.nodes || []).map(n => {
+        const s = nodeStyles[n.style] || nodeStyles.default;
+        const instanceColor = n.entityInstance ? hostColors[n.entityInstance] : null;
+
+        let borderRadius = '4px';
+        if (n.shape === 'hexagon') borderRadius = '16px';
+        if (n.shape === 'trapezoid') borderRadius = '4px 4px 12px 12px';
+
+        let label = n.fullLabel || n.label || n.id;
+        const meta = [];
+        if (n.classes?.length) meta.push(n.classes.join('+'));
+        if (n.isPolicyDispatch) meta.push('policy');
+        if (n.isParametric && n.fnArgNames?.length) meta.push('(' + n.fnArgNames.join(', ') + ')');
+        if (meta.length) label += '\n' + meta.join(' ');
+
+        return {
+          id: n.id,
+          sourcePosition,
+          targetPosition,
+          data: { label },
+          style: {
+            background: s.bg,
+            border: '2px solid ' + s.border,
+            color: s.color,
+            borderRadius,
+            width: 200,
+            boxShadow: instanceColor
+              ? '0 0 0 3px ' + instanceColor + ', 0 2px 4px rgba(0,0,0,0.2)'
+              : '0 2px 4px rgba(0,0,0,0.2)',
+            whiteSpace: 'pre-line',
+            fontSize: '11px',
+            lineHeight: '1.3',
+          }
+        };
+      });
+
+      const edges = (data.edges || []).map((e, idx) => {
+        const es = edgeStyleMap[e.style] || edgeStyleMap.normal;
+        return {
+          id: 'e-' + e.from + '-' + e.to + '-' + idx,
+          source: e.from,
+          target: e.to,
+          label: e.label,
+          animated: es.animated,
+          type: 'smoothstep',
+          data: { edgeType: e.style || 'normal' },
+          style: { stroke: es.stroke, strokeDasharray: es.dash },
+          labelStyle: { fill: '#e5e7eb', fontSize: '10px' },
+          labelBgStyle: { fill: '#1f2937', fillOpacity: 0.8 },
+        };
+      });
+
+      return { nodes, edges, direction, hostColors };
+    };
+
+    // --- ELK layout ---
+    const NODE_WIDTH = 220;
+    const NODE_HEIGHT = 55;
+    const GROUP_PADDING = 20;
+    const GROUP_HEADER = 30;
+
+    const nodePlacementStrategies = [
+      'LINEAR_SEGMENTS',
+      'BRANDES_KOEPF',
+      'NETWORK_SIMPLEX',
+      'SIMPLE',
+    ];
+
+    const groupPalette = [
+      { bg: 'rgba(59,130,246,0.08)',  border: 'rgba(59,130,246,0.35)',  label: '#93c5fd' },
+      { bg: 'rgba(139,92,246,0.08)',  border: 'rgba(139,92,246,0.35)',  label: '#c4b5fd' },
+      { bg: 'rgba(16,185,129,0.08)',  border: 'rgba(16,185,129,0.35)',  label: '#6ee7b7' },
+      { bg: 'rgba(245,158,11,0.08)',  border: 'rgba(245,158,11,0.35)', label: '#fcd34d' },
+      { bg: 'rgba(239,68,68,0.08)',   border: 'rgba(239,68,68,0.35)',   label: '#fca5a5' },
+      { bg: 'rgba(6,182,212,0.08)',   border: 'rgba(6,182,212,0.35)',   label: '#67e8f9' },
+      { bg: 'rgba(236,72,153,0.08)',  border: 'rgba(236,72,153,0.35)',  label: '#f9a8d4' },
+      { bg: 'rgba(132,204,22,0.08)',  border: 'rgba(132,204,22,0.35)', label: '#bef264' },
+    ];
+
+    // Scope kind ordering for sorting groups left → right
+    const scopeKindOrder = { fleet: 0, environment: 1, host: 2, user: 3 };
+
+    // Build groups from IR data.
+    // Returns { groupId -> { label, kind, nodeIds[], subGroups: { subId -> { label, nodeIds[] } } } }
+    // Per-host IR: group by entityInstance (kind:name), flat.
+    // Fleet IR: group by host with user sub-groups inside.
+    const buildGroups = (irData, nodeIds) => {
+      if (!irData) return {};
+      const nodeIdSet = new Set(nodeIds);
+      const groups = {};
+
+      if (irData.entityInstances?.length && !irData.scopes) {
+        // Per-host IR: flat grouping by entityInstance
+        for (const inst of irData.entityInstances) {
+          const key = inst.kind === inst.name ? inst.name : inst.kind + ':' + inst.name;
+          const members = (irData.nodes || [])
+            .filter(n => (n.entityInstance || null) === key && nodeIdSet.has(n.id))
+            .map(n => n.id);
+          if (members.length > 0) {
+            groups[inst.id] = {
+              label: inst.label,
+              kind: inst.kind || null,
+              nodeIds: members,
+              subGroups: {},
+            };
+          }
+        }
+      } else if (irData.scopes?.length) {
+        // Fleet IR: group by host with user sub-groups.
+        const hostScopes = irData.scopes.filter(s => s.kind === 'host');
+
+        // Map each scope to its host scope (walk up parent chain)
+        const scopeToHost = {};
+        for (const s of irData.scopes) {
+          if (s.kind === 'host') {
+            scopeToHost[s.id] = s.name;
+          } else {
+            let cur = s.parent;
+            while (cur) {
+              const parent = irData.scopes.find(p => p.id === cur);
+              if (parent?.kind === 'host') { scopeToHost[s.id] = parent.name; break; }
+              cur = parent?.parent || null;
+            }
+          }
+        }
+
+        // Find user scopes per host
+        const userScopesByHost = {};
+        for (const s of irData.scopes) {
+          if (s.kind === 'user' && scopeToHost[s.id]) {
+            const host = scopeToHost[s.id];
+            (userScopesByHost[host] = userScopesByHost[host] || []).push(s);
+          }
+        }
+
+        for (const scope of hostScopes) {
+          // User sub-groups: user-scoped aspect nodes + user scope node
+          const subGroups = {};
+          for (const userScope of (userScopesByHost[scope.name] || [])) {
+            const userScopeNode = (irData.nodes || []).find(
+              n => n.isScope && n.scope === userScope.id && nodeIdSet.has(n.id)
+            );
+            const userKey = 'user:' + userScope.name;
+            const userAspects = (irData.nodes || [])
+              .filter(n => !n.isScope && n.host === scope.name && n.entityInstance === userKey && nodeIdSet.has(n.id))
+              .map(n => n.id);
+            const userMembers = userScopeNode ? [userScopeNode.id, ...userAspects] : userAspects;
+            if (userMembers.length > 0) {
+              subGroups['subgroup-' + scope.name + '-' + userScope.name] = {
+                label: userScope.label || 'user: ' + userScope.name,
+                nodeIds: userMembers,
+              };
+            }
+          }
+
+          const subGroupNodeIds = new Set(Object.values(subGroups).flatMap(sg => sg.nodeIds));
+
+          // Host group: host-scoped aspects + host scope node (not in sub-groups)
+          const hostMembers = (irData.nodes || [])
+            .filter(n => {
+              if (!nodeIdSet.has(n.id)) return false;
+              if (subGroupNodeIds.has(n.id)) return false;
+              if (!n.isScope) return n.host === scope.name;
+              const nodeScope = irData.scopes.find(s => s.id === n.scope);
+              return nodeScope && scopeToHost[nodeScope.id] === scope.name;
+            })
+            .map(n => n.id);
+
+          if (hostMembers.length > 0 || Object.keys(subGroups).length > 0) {
+            groups['group-' + scope.name] = {
+              label: scope.label || scope.name,
+              kind: 'host',
+              nodeIds: hostMembers,
+              subGroups,
+            };
+          }
+        }
+      } else if ((irData.entityKinds || []).length > 0) {
+        // Per-host IR fallback: group by entityKind
+        for (const ek of irData.entityKinds) {
+          const members = (irData.nodes || [])
+            .filter(n => n.entityKind === ek.name && nodeIdSet.has(n.id))
+            .map(n => n.id);
+          if (members.length > 0) {
+            const ctxLabel = ek.ctxKeys?.length ? ` { ${ek.ctxKeys.join(', ')} }` : '';
+            groups[ek.id] = {
+              label: ek.name + ctxLabel,
+              kind: ek.name,
+              nodeIds: members,
+              subGroups: {},
+            };
+          }
+        }
+      }
+
+      return groups;
+    };
+
+    const getLayoutedElements = async (nodes, edges, direction = 'LR', nodePlacement = 'LINEAR_SEGMENTS', irData = null) => {
+      const elkDirection = direction === 'LR' ? 'RIGHT' : 'DOWN';
+      const groups = buildGroups(irData, nodes.map(n => n.id));
+
+      // Collect ALL grouped node IDs (including sub-group members)
+      const groupedNodeIds = new Set(
+        Object.values(groups).flatMap(g =>
+          [...g.nodeIds, ...Object.values(g.subGroups || {}).flatMap(sg => sg.nodeIds)]
+        )
+      );
+
+      const layoutEdges = edges
+        .filter(e => e.data?.edgeType !== 'pipe')
+        .map((e, i) => ({
+          id: e.id || `elk-e-${i}`,
+          sources: [e.source],
+          targets: [e.target],
+        }));
+
+      const sharedLayoutOptions = {
+        'elk.algorithm': 'layered',
+        'elk.direction': elkDirection,
+        'elk.spacing.nodeNode': '40',
+        'elk.layered.spacing.nodeNodeBetweenLayers': '160',
+        'elk.layered.nodePlacement.strategy': nodePlacement,
+        'elk.edgeRouting': 'SPLINES',
+      };
+
+      const groupPadOpts = {
+        'elk.padding': `[top=${GROUP_HEADER + GROUP_PADDING},left=${GROUP_PADDING},bottom=${GROUP_PADDING},right=${GROUP_PADDING}]`,
+      };
+
+      // Sort groups by scope kind for left→right ordering
+      const sortedGroupEntries = Object.entries(groups).sort((a, b) => {
+        const ka = a[1].kind || '';
+        const kb = b[1].kind || '';
+        return (scopeKindOrder[ka] ?? 99) - (scopeKindOrder[kb] ?? 99);
+      });
+
+      // Build ELK compound groups with optional sub-groups
+      const elkGroups = sortedGroupEntries.map(([groupId, g]) => {
+        const allGroupIds = new Set([...g.nodeIds, ...Object.values(g.subGroups || {}).flatMap(sg => sg.nodeIds)]);
+
+        // Sub-group ELK children
+        const elkSubGroups = Object.entries(g.subGroups || {}).map(([sgId, sg]) => ({
+          id: sgId,
+          layoutOptions: { ...sharedLayoutOptions, ...groupPadOpts },
+          children: sg.nodeIds.map(nid => ({ id: nid, width: NODE_WIDTH, height: NODE_HEIGHT })),
+          edges: layoutEdges.filter(e =>
+            sg.nodeIds.includes(e.sources[0]) && sg.nodeIds.includes(e.targets[0])
+          ),
+        }));
+
+        // Direct children (not in any sub-group)
+        const directChildren = g.nodeIds.map(nid => ({ id: nid, width: NODE_WIDTH, height: NODE_HEIGHT }));
+
+        // Edges internal to this group (including cross-subgroup)
+        const subEdgeIds = new Set(elkSubGroups.flatMap(sg => sg.edges.map(e => e.id)));
+        const groupEdges = layoutEdges.filter(e =>
+          !subEdgeIds.has(e.id) && allGroupIds.has(e.sources[0]) && allGroupIds.has(e.targets[0])
+        );
+
+        return {
+          id: groupId,
+          layoutOptions: { ...sharedLayoutOptions, ...groupPadOpts },
+          children: [...elkSubGroups, ...directChildren],
+          edges: groupEdges,
+        };
+      });
+
+      // Ungrouped nodes
+      const ungroupedNodes = nodes
+        .filter(n => !groupedNodeIds.has(n.id))
+        .map(n => ({ id: n.id, width: NODE_WIDTH, height: NODE_HEIGHT }));
+
+      // Root-level edges
+      const allInternalEdgeIds = new Set(elkGroups.flatMap(g => [
+        ...g.edges.map(e => e.id),
+        ...(g.children || []).filter(c => c.edges).flatMap(c => c.edges.map(e => e.id)),
+      ]));
+      const rootEdges = layoutEdges.filter(e => !allInternalEdgeIds.has(e.id));
+
+      const graph = {
+        id: 'root',
+        layoutOptions: sharedLayoutOptions,
+        children: [...elkGroups, ...ungroupedNodes],
+        edges: rootEdges,
+      };
+
+      const layouted = await elk.layout(graph);
+
+      // Build React Flow nodes from ELK output
+      const resultNodes = [];
+      const nodeById = {};
+      nodes.forEach(n => { nodeById[n.id] = n; });
+
+      // All sub-group defs for lookup
+      const allSubGroups = {};
+      for (const g of Object.values(groups)) {
+        for (const [sgId, sg] of Object.entries(g.subGroups || {})) {
+          allSubGroups[sgId] = sg;
+        }
+      }
+
+      const processElkChildren = (elkChildren, rfParentId, depth) => {
+        (elkChildren || []).forEach((child, ci) => {
+          const groupDef = groups[child.id];
+          const subGroupDef = allSubGroups[child.id];
+
+          if (groupDef || subGroupDef) {
+            // Group or sub-group container
+            const palIdx = depth === 0 ? ci : ci + 4; // offset sub-group colors
+            const palette = groupPalette[palIdx % groupPalette.length];
+            const label = groupDef?.label || subGroupDef?.label || child.id;
+            const rfNode = {
+              id: child.id,
+              position: { x: child.x, y: child.y },
+              data: { label },
+              type: 'group',
+              style: {
+                width: child.width,
+                height: child.height,
+                background: palette.bg,
+                border: `${1.5 + depth * 0.5}px dashed ${palette.border}`,
+                borderRadius: `${8 - depth * 2}px`,
+                color: palette.label,
+                fontSize: `${13 - depth}px`,
+                fontWeight: 'bold',
+                fontFamily: 'monospace',
+                padding: 0,
+              },
+            };
+            if (rfParentId) rfNode.parentId = rfParentId;
+            resultNodes.push(rfNode);
+            // Recurse for nested children
+            processElkChildren(child.children, child.id, depth + 1);
+          } else {
+            // Leaf node
+            const original = nodeById[child.id];
+            if (original) {
+              const rfNode = {
+                ...original,
+                position: { x: child.x, y: child.y },
+              };
+              if (rfParentId) {
+                rfNode.parentId = rfParentId;
+                rfNode.extent = 'parent';
+              }
+              resultNodes.push(rfNode);
+            }
+          }
+        });
+      };
+
+      processElkChildren(layouted.children, null, 0);
+
+      return { nodes: resultNodes, edges };
+    };
+
+    // --- Components ---
+
+    function Legend({ hostColors }) {
+      return (
+        <div className="legend">
+          {Object.entries(nodeStyles).map(([name, s]) => (
+            <div key={name} className="legend-item">
+              <div className="legend-swatch" style={{ background: s.bg, borderColor: s.border }} />
+              <span>{name}</span>
+            </div>
+          ))}
+          {Object.entries(hostColors || {}).length > 0 && (
+            <>
+              <span style={{ width: '100%', borderTop: '1px solid #4b5563', margin: '2px 0' }} />
+              {Object.entries(hostColors).map(([name, color]) => (
+                <div key={name} className="legend-item">
+                  <div className="legend-swatch" style={{ background: color }} />
+                  <span>{name}</span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      );
+    }
+
+    function PipeInfo({ pipes }) {
+      if (!pipes || Object.keys(pipes).length === 0) return null;
+      return (
+        <div className="pipe-info">
+          <h4>Pipes</h4>
+          {Object.entries(pipes).map(([name, p]) => (
+            <div key={name} style={{ marginBottom: 6 }}>
+              <strong>{name}</strong>
+              {p.producers?.map((pr, i) => (
+                <div key={i} className="producer"> {pr.host}:{pr.aspect} produces</div>
+              ))}
+              {p.flows?.map((f, i) => (
+                <div key={i} className="flow"> {f.from} → {f.to}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    function App() {
+      const [nodes, setNodes, onNodesChange] = useNodesState([]);
+      const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+      const [jsonInput, setJsonInput] = useState('');
+      const [error, setError] = useState('');
+      const [hostColors, setHostColors] = useState({});
+      const [irData, setIrData] = useState(null);
+      const [filters, setFilters] = useState({ hosts: {}, showPolicies: true, showProviders: true });
+      const [nodePlacement, setNodePlacement] = useState('LINEAR_SEGMENTS');
+      const [selectedNodeId, setSelectedNodeId] = useState(null);
+      const [collapsedScopes, setCollapsedScopes] = useState(new Set());
+      const fileRef = useRef(null);
+
+      const renderData = useCallback(async (data, currentFilters, placement, collapsed) => {
+        const f = currentFilters || filters;
+        const strat = placement || nodePlacement;
+        const cs = collapsed !== undefined ? collapsed : collapsedScopes;
+        const isFleet = isFleetIR(data);
+
+        let flowData;
+        if (isFleet) {
+          // Initialize host filters if empty
+          if (Object.keys(f.hosts).length === 0) {
+            const hosts = {};
+            (data.scopes || []).filter(s => s.kind === 'host').forEach(s => { hosts[s.name] = true; });
+            f.hosts = hosts;
+          }
+          flowData = transformFleetIR(data, f, cs);
+        } else {
+          flowData = transformHostIR(data);
+        }
+
+        const layouted = await getLayoutedElements(flowData.nodes, flowData.edges, flowData.direction, strat, data);
+        setNodes(layouted.nodes);
+        setEdges(layouted.edges);
+        setHostColors(flowData.hostColors);
+        setIrData(data);
+        setError('');
+      }, [filters, nodePlacement, collapsedScopes]);
+
+      const handleRender = async () => {
+        try {
+          const parsed = JSON.parse(jsonInput);
+          if (!parsed.nodes || !parsed.edges) throw new Error("JSON must contain 'nodes' and 'edges'.");
+          const newFilters = { hosts: {}, showPolicies: true, showProviders: true };
+          setFilters(newFilters);
+          const initCollapsed = initCollapsedScopes(parsed);
+          setCollapsedScopes(initCollapsed);
+          await renderData(parsed, newFilters, undefined, initCollapsed);
+        } catch (err) {
+          setError('Invalid JSON: ' + err.message);
+        }
+      };
+
+      const initCollapsedScopes = useCallback((parsed) => {
+        const cs = new Set();
+        if (isFleetIR(parsed)) {
+          // Collapse everything: all non-fleet scopes start collapsed
+          (parsed.scopes || []).forEach(s => {
+            if (s.kind !== 'fleet') cs.add(s.id);
+          });
+        }
+        return cs;
+      }, []);
+
+      const loadFile = useCallback((file) => {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          try {
+            let text = ev.target.result;
+            if (file.name.endsWith('.md')) {
+              const match = text.match(/```json\n([\s\S]*?)\n```/);
+              if (match) text = match[1];
+            }
+            setJsonInput(text);
+            const parsed = JSON.parse(text);
+            const newFilters = { hosts: {}, showPolicies: true, showProviders: true };
+            setFilters(newFilters);
+            const cs = initCollapsedScopes(parsed);
+            setCollapsedScopes(cs);
+            await renderData(parsed, newFilters, undefined, cs);
+          } catch (err) {
+            setError('Failed to parse: ' + err.message);
+          }
+        };
+        reader.readAsText(file);
+      }, [renderData, initCollapsedScopes]);
+
+      const handleFileDrop = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragover(false);
+        loadFile(e.dataTransfer?.files?.[0]);
+      }, [loadFile]);
+
+      const handleFileInput = useCallback((e) => {
+        loadFile(e.target?.files?.[0]);
+      }, [loadFile]);
+
+      // Paste handler — ctrl+V JSON from clipboard.
+      React.useEffect(() => {
+        const onPaste = async (e) => {
+          const text = e.clipboardData?.getData('text');
+          if (text && text.trim().startsWith('{')) {
+            try {
+              const parsed = JSON.parse(text);
+              if (parsed.nodes && parsed.edges) {
+                setJsonInput(text);
+                const newFilters = { hosts: {}, showPolicies: true, showProviders: true };
+                setFilters(newFilters);
+                const cs = initCollapsedScopes(parsed);
+                setCollapsedScopes(cs);
+                await renderData(parsed, newFilters, undefined, cs);
+              }
+            } catch (_) {}
+          }
+        };
+        window.addEventListener('paste', onPaste);
+        return () => window.removeEventListener('paste', onPaste);
+      }, [renderData, initCollapsedScopes]);
+
+      const toggleHost = (host) => {
+        const newFilters = { ...filters, hosts: { ...filters.hosts, [host]: !filters.hosts[host] } };
+        setFilters(newFilters);
+        if (irData) renderData(irData, newFilters);
+      };
+
+      const toggleFilter = (key) => {
+        const newFilters = { ...filters, [key]: !filters[key] };
+        setFilters(newFilters);
+        if (irData) renderData(irData, newFilters);
+      };
+
+      const handlePlacementChange = (e) => {
+        const strat = e.target.value;
+        setNodePlacement(strat);
+        if (irData) renderData(irData, filters, strat);
+      };
+
+      const onNodeDoubleClick = useCallback((_, node) => {
+        if (!node.data?.isScope || !node.data?.scopeId || !irData) return;
+        const scopeId = node.data.scopeId;
+        setCollapsedScopes(prev => {
+          const next = new Set(prev);
+          if (next.has(scopeId)) next.delete(scopeId);
+          else next.add(scopeId);
+          renderData(irData, filters, undefined, next);
+          return next;
+        });
+      }, [irData, filters, renderData]);
+
+      const expandAll = useCallback(() => {
+        const cs = new Set();
+        setCollapsedScopes(cs);
+        if (irData) renderData(irData, filters, undefined, cs);
+      }, [irData, filters, renderData]);
+
+      const collapseAll = useCallback(() => {
+        if (!irData) return;
+        const cs = initCollapsedScopes(irData);
+        setCollapsedScopes(cs);
+        renderData(irData, filters, undefined, cs);
+      }, [irData, filters, renderData, initCollapsedScopes]);
+
+      const onNodeClick = useCallback((_, node) => {
+        setSelectedNodeId(prev => prev === node.id ? null : node.id);
+      }, []);
+
+      const onPaneClick = useCallback(() => {
+        setSelectedNodeId(null);
+      }, []);
+
+      // Compute connected node/edge sets for highlighting
+      const connectedEdgeIds = React.useMemo(() => {
+        if (!selectedNodeId) return null;
+        const set = new Set();
+        edges.forEach(e => {
+          if (e.source === selectedNodeId || e.target === selectedNodeId) set.add(e.id);
+        });
+        return set;
+      }, [selectedNodeId, edges]);
+
+      const connectedNodeIds = React.useMemo(() => {
+        if (!selectedNodeId) return null;
+        const set = new Set([selectedNodeId]);
+        edges.forEach(e => {
+          if (e.source === selectedNodeId) set.add(e.target);
+          if (e.target === selectedNodeId) set.add(e.source);
+        });
+        return set;
+      }, [selectedNodeId, edges]);
+
+      const styledEdges = React.useMemo(() => {
+        if (!connectedEdgeIds) return edges;
+        return edges.map(e => ({
+          ...e,
+          className: connectedEdgeIds.has(e.id) ? 'highlighted' : 'dimmed',
+        }));
+      }, [edges, connectedEdgeIds]);
+
+      const styledNodes = React.useMemo(() => {
+        if (!connectedNodeIds) return nodes;
+        return nodes.map(n => {
+          if (connectedNodeIds.has(n.id)) return { ...n, className: '' };
+          // Don't dim group nodes that contain a connected descendant
+          if (n.type === 'group') {
+            const hasConnected = (gid) => nodes.some(c =>
+              c.parentId === gid && (connectedNodeIds.has(c.id) || (c.type === 'group' && hasConnected(c.id)))
+            );
+            if (hasConnected(n.id)) return { ...n, className: '' };
+          }
+          return { ...n, className: 'dimmed' };
+        });
+      }, [nodes, connectedNodeIds]);
+
+      const isFleet = irData && isFleetIR(irData);
+
+      return (
+        <div style={{ width: '100vw', height: '100vh' }}>
+          <div className="control-panel">
+            <strong>Den IR Viewer</strong>
+
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className="secondary" onClick={() => fileRef.current?.click()}>
+                Open File
+              </button>
+              <input ref={fileRef} type="file" accept=".json,.md" style={{ display: 'none' }} onChange={handleFileInput} />
+              <span style={{ fontSize: 10, color: '#9ca3af', alignSelf: 'center' }}>or paste JSON (Ctrl+V) or type below</span>
+            </div>
+
+            <textarea
+              value={jsonInput}
+              onChange={(e) => setJsonInput(e.target.value)}
+              spellCheck="false"
+              placeholder="Paste Den IR JSON here..."
+            />
+            {error && <div className="error">{error}</div>}
+            <button onClick={handleRender}>Render Graph</button>
+
+            {irData && (
+              <div className="stats">
+                <div>Nodes: <span>{nodes.length}</span></div>
+                <div>Edges: <span>{edges.length}</span></div>
+                {isFleet && <div>Scopes: <span>{irData.scopes?.length}</span></div>}
+                {isFleet && <div>Pipes: <span>{Object.keys(irData.pipes || {}).length}</span></div>}
+                <div>Type: <span>{isFleet ? 'Fleet' : 'Host'}</span></div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label style={{ fontSize: 11, color: '#9ca3af', whiteSpace: 'nowrap' }}>Node placement:</label>
+              <select
+                value={nodePlacement}
+                onChange={handlePlacementChange}
+                style={{
+                  flex: 1,
+                  background: '#374151',
+                  color: '#e5e7eb',
+                  border: '1px solid #4b5563',
+                  borderRadius: 4,
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                }}
+              >
+                {nodePlacementStrategies.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+
+            {isFleet && (
+              <>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: '#9ca3af' }}>Scopes:</span>
+                  <button className="secondary" style={{ fontSize: 10, padding: '3px 8px' }} onClick={expandAll}>Expand All</button>
+                  <button className="secondary" style={{ fontSize: 10, padding: '3px 8px' }} onClick={collapseAll}>Collapse All</button>
+                  <span style={{ fontSize: 10, color: '#6b7280' }}>double-click scope to toggle</span>
+                </div>
+                <div style={{ fontSize: 11, color: '#9ca3af' }}>Filter by host:</div>
+                <div className="filter-row">
+                  {Object.keys(filters.hosts).map(h => (
+                    <div
+                      key={h}
+                      className={'filter-chip' + (filters.hosts[h] ? ' active' : '')}
+                      onClick={() => toggleHost(h)}
+                      style={filters.hosts[h] ? { borderColor: hostColors[h], background: hostColors[h] + '30' } : {}}
+                    >
+                      {h}
+                    </div>
+                  ))}
+                </div>
+                <div className="filter-row">
+                  <div
+                    className={'filter-chip' + (filters.showPolicies ? ' active' : '')}
+                    onClick={() => toggleFilter('showPolicies')}
+                  >policies</div>
+                  <div
+                    className={'filter-chip' + (filters.showProviders ? ' active' : '')}
+                    onClick={() => toggleFilter('showProviders')}
+                  >providers</div>
+                </div>
+              </>
+            )}
+
+            <Legend hostColors={hostColors} />
+            {isFleet && <PipeInfo pipes={irData.pipes} />}
+          </div>
+
+          <ReactFlow
+            nodes={styledNodes}
+            edges={styledEdges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeClick={onNodeClick}
+            onNodeDoubleClick={onNodeDoubleClick}
+            onPaneClick={onPaneClick}
+            fitView
+            minZoom={0.02}
+          >
+            <Background color="#374151" gap={16} />
+            <Controls />
+            <MiniMap
+              nodeStrokeColor={() => '#1a192b'}
+              nodeColor={(n) => n.style?.background || '#fff'}
+              nodeBorderRadius={2}
+              style={{ background: '#1f2937' }}
+              maskColor="rgba(17, 24, 39, 0.7)"
+              pannable
+              zoomable
+            />
+          </ReactFlow>
+        </div>
+      );
+    }
+
+    const root = createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

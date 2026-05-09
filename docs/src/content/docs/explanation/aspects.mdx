@@ -6,9 +6,25 @@ description: How aspects use the __functor pattern for context-awareness.
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="Source" icon="github">
-[`nix/lib/aspects`](https://github.com/vic/den/tree/main/nix/lib/aspects) --
-[`nix/lib.nix`](https://github.com/vic/den/blob/main/nix/lib.nix) --
+[`nix/lib/aspects`](https://github.com/denful/den/tree/main/nix/lib/aspects) --
+[`nix/lib.nix`](https://github.com/denful/den/blob/main/nix/lib.nix) --
 </Aside>
+
+## What is an aspect?
+
+An **aspect** is a composable unit of configuration that bundles modules
+for one or more Nix classes (`nixos`, `darwin`, `homeManager`, or custom)
+in a single attrset. Aspects declare *what behavior applies* — one
+concern, all platforms. They compose via `includes` (DAG edges) and
+`provides` (named sub-aspects).
+
+```nix
+den.aspects.gaming = { host, user }: {
+  nixos = { pkgs, ... }: { programs.steam.enable = true; };
+  homeManager = { pkgs, ... }: { programs.mangohud.enable = true; };
+  includes = [ den.aspects.performance ];
+};
+```
 
 ## The `__functor` Pattern
 
@@ -28,11 +44,12 @@ The `__functor` receives `self` (the attrset itself) and returns a function.
 ## Aspects as Functors
 
 Every aspect in Den has a default `__functor` that inspects context
-parameters to decide what to produce:
+parameters to decide what to produce. Bare attrsets and functions work
+directly — `den.lib.parametric` is no longer needed:
 
 ```nix
-# Default: parametric. inspects context shape
-den.lib.parametric {
+# Bare functions work directly — no wrapper required
+{
   nixos.foo = 1;
   includes = [
     ({ host }: { nixos.networking.hostName = host.hostName; })
@@ -97,3 +114,10 @@ module = den.lib.aspects.resolve "nixos" den.aspects.igloo;
 Resolution collects all `nixos` attrs from owned configs, walks `includes`
 recursively, applies parametric dispatch, deduplicates, and produces a
 single `deferredModule` containing all NixOS configuration.
+
+## See also
+
+- [Configure Aspects](/guides/configure-aspects/) — practical guide to owned configs, includes, provides
+- [Parametric Aspects](/explanation/parametric/) — context-aware dispatch via argument introspection
+- [Resolution Pipeline](/explanation/context-pipeline/) — how aspects feed into the full pipeline
+- [den.aspects reference](/reference/aspects/) — full option documentation

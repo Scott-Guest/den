@@ -205,7 +205,15 @@
         expr = {
           hasHostEntry = builtins.any (e: e.name == "host") result.state.entries;
           allEntriesHaveClass = builtins.all (e: e.class == "nixos") result.state.entries;
-          hasImports = (result.state.imports null) != [ ];
+          hasImports =
+            ((builtins.foldl' (
+              acc: sd:
+              lib.zipAttrsWith (_: builtins.concatLists) [
+                acc
+                sd
+              ]
+            ) { } (builtins.attrValues (result.state.scopedClassImports null))).nixos or [ ]
+            ) != [ ];
         };
         expected = {
           hasHostEntry = true;
@@ -267,12 +275,23 @@
         expr = {
           hasProvider = builtins.elem "host-provider" entryNames;
           hasHost = builtins.elem "host" entryNames;
-          importCount = builtins.length (result.state.imports null);
+          importCount = builtins.length (
+            (builtins.foldl' (
+              acc: sd:
+              lib.zipAttrsWith (_: builtins.concatLists) [
+                acc
+                sd
+              ]
+            ) { } (builtins.attrValues (result.state.scopedClassImports null))).nixos or [ ]
+          );
         };
         expected = {
           hasProvider = true;
           hasHost = true;
-          importCount = 2;
+          # 3 = host (base), explicit host-provider include, self-provide result.
+          # Self-provide now resolves positional-arg providers inline, so both
+          # the explicit include and the self-provide produce modules.
+          importCount = 3;
         };
       }
     );
@@ -332,8 +351,16 @@
       {
         expr = {
           hasEntries = result.state.entries != [ ];
-          hasPaths = result.state.paths != [ ];
-          hasImports = (result.state.imports null) != [ ];
+          hasPaths = (result.state.pathSet) null != { };
+          hasImports =
+            ((builtins.foldl' (
+              acc: sd:
+              lib.zipAttrsWith (_: builtins.concatLists) [
+                acc
+                sd
+              ]
+            ) { } (builtins.attrValues (result.state.scopedClassImports null))).nixos or [ ]
+            ) != [ ];
         };
         expected = {
           hasEntries = true;
@@ -358,7 +385,11 @@
             }
           ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect parent;
+        comp = fx.send "resolve" {
+          aspect = parent;
+          identity = den.lib.aspects.fx.identity.key parent;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.composeHandlers (den.lib.aspects.fx.pipeline.defaultHandlers
             {
@@ -387,7 +418,11 @@
           meta = { };
           includes = [ ];
         };
-        comp = den.lib.aspects.fx.aspect.aspectToEffect root;
+        comp = fx.send "resolve" {
+          aspect = root;
+          identity = den.lib.aspects.fx.identity.key root;
+          ctx = { };
+        };
         result = fx.handle {
           handlers = den.lib.aspects.fx.pipeline.composeHandlers (den.lib.aspects.fx.pipeline.defaultHandlers
             {
@@ -404,6 +439,112 @@
       {
         expr = rootEntry.parent;
         expected = null;
+      }
+    );
+
+    test-tracingHandler-entity-kind-seeded = denTest (
+      { den, ... }:
+      let
+        entity = {
+          name = "host";
+          __entityKind = "host";
+          meta = {
+            provider = [ ];
+          };
+          nixos = {
+            a = 1;
+          };
+          includes = [
+            {
+              name = "child";
+              meta = {
+                provider = [ ];
+              };
+              nixos = {
+                b = 2;
+              };
+              includes = [ ];
+            }
+          ];
+        };
+        result =
+          den.lib.aspects.fx.pipeline.mkPipeline
+            {
+              class = "nixos";
+              extraHandlers = den.lib.aspects.fx.trace.tracingHandler "nixos";
+              extraState = {
+                entries = [ ];
+                ctxTrace = [ ];
+              };
+            }
+            {
+              self = entity // {
+                into = _: { };
+                provides = { };
+              };
+              ctx = { };
+            };
+        hostEntry = lib.findFirst (e: e.name == "host") null result.state.entries;
+        childEntry = lib.findFirst (e: e.name == "child") null result.state.entries;
+      in
+      {
+        expr = {
+          hostEntityKind = hostEntry.entityKind;
+          childEntityKind = childEntry.entityKind;
+          ctxTraceLength = builtins.length result.state.ctxTrace;
+          ctxTraceKey = (builtins.head result.state.ctxTrace).key;
+        };
+        expected = {
+          hostEntityKind = "host";
+          childEntityKind = "host";
+          ctxTraceLength = 1;
+          ctxTraceKey = "host";
+        };
+      }
+    );
+
+    test-tracingHandler-record-fired = denTest (
+      { den, ... }:
+      let
+        fx = den.lib.fx;
+        comp = fx.send "record-fired" {
+          entityKind = "host";
+          firedPolicies = {
+            host-to-users = true;
+            host-to-default = true;
+          };
+        };
+        result = fx.handle {
+          handlers = den.lib.aspects.fx.pipeline.composeHandlers (den.lib.aspects.fx.pipeline.defaultHandlers
+            {
+              class = "nixos";
+              ctx = { };
+            }
+          ) (den.lib.aspects.fx.trace.tracingHandler "nixos");
+          state = den.lib.aspects.fx.pipeline.defaultState // {
+            entries = [ ];
+            ctxTrace = [ ];
+          };
+        } comp;
+        policyEntries = builtins.filter (e: e.isPolicyDispatch or false) result.state.entries;
+        policyNames = lib.sort (a: b: a < b) (map (e: e.policyName) policyEntries);
+      in
+      {
+        expr = {
+          count = builtins.length policyEntries;
+          names = policyNames;
+          fromKind = (builtins.head policyEntries).from;
+          toIsNull = (builtins.head policyEntries).to == null;
+        };
+        expected = {
+          count = 2;
+          names = [
+            "host-to-default"
+            "host-to-users"
+          ];
+          fromKind = "host";
+          toIsNull = true;
+        };
       }
     );
 

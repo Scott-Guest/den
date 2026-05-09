@@ -1,12 +1,5 @@
-{
-  den,
-  lib,
-  withSystem,
-  ...
-}:
+{ withSystem, ... }:
 let
-  inherit (den.lib) parametric;
-
   description = ''
     Provides the `flake-parts` `self'` (the flake's `self` with system pre-selected)
     as a top-level module argument.
@@ -41,7 +34,12 @@ let
       }
     );
 
-  osAspect = { host }: mkAspect host.class host.system;
+  osAspect =
+    { host }:
+    {
+      name = "self'/os";
+    }
+    // mkAspect host.class host.system;
 
   userAspect =
     {
@@ -49,13 +47,20 @@ let
       host,
     }:
     {
+      name = "self'/user";
       includes = map (c: mkAspect c host.system) user.classes;
     };
 
-  homeAspect = { home }: mkAspect home.class home.system;
+  homeAspect =
+    { home }:
+    {
+      name = "self'/home";
+    }
+    // mkAspect home.class home.system;
 in
 {
-  den.provides.self' = parametric.exactly {
+  den.provides.self' = {
+    name = "self'";
     inherit description;
     includes = [
       osAspect

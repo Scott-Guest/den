@@ -48,25 +48,34 @@
       or it can be default imported per host/user/home:
 
           # load from ./hosts/<host>/_nixos
-          den.ctx.os.includes = [ (den.provides.import-tree.provides.host ./hosts) ];
+          den.schema.host.includes = [ (den.provides.import-tree.provides.host ./hosts) ];
 
           # load from ./users/<user>/{_homeManager, _nixos}
-          den.ctx.hm.includes = [ (den.provides.import-tree.provides.user ./users) ];
+          den.schema.user.includes = [ (den.provides.import-tree.provides.user ./users) ];
 
           # load from ./homes/<home>/_homeManager
-          den.ctx.home.includes = [ (den.provides.import-tree.provides.home ./homes) ];
+          den.schema.home.includes = [ (den.provides.import-tree.provides.home ./homes) ];
 
       you are also free to create your own auto-imports layout following the implementation of these.
   '';
 
-  den.provides.import-tree.__functor =
-    _: root:
-    { class, aspect-chain }:
-    let
-      path = den.lib.take.unused aspect-chain "${toString root}/_${class}";
-      aspect.${class}.imports = [ (inputs.import-tree path) ];
-    in
-    if builtins.pathExists path then aspect else { };
+  den.provides.import-tree.__functor = _: root: {
+    name = "import-tree(${baseNameOf (toString root)})";
+    meta.provider = [
+      "den"
+      "provides"
+    ];
+    __fn =
+      { class, ... }:
+      let
+        path = "${toString root}/_${class}";
+        aspect.${class}.imports = [ (inputs.import-tree path) ];
+      in
+      if builtins.pathExists path then aspect else { };
+    __args = {
+      class = true;
+    };
+  };
 
   den.provides.import-tree.provides = {
     host = root: { host, ... }: den.provides.import-tree "${toString root}/${host.name}";

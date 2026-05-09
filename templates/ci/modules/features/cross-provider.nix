@@ -10,34 +10,37 @@
         ...
       }:
       {
-        den.ctx.parent.description = "{x} context";
-        den.ctx.parent.provides.parent =
-          { x }:
-          {
-            funny.names = [ "parent-${x}" ];
-          };
-        den.ctx.parent.provides.child =
-          _:
-          { x, y }:
-          {
-            funny.names = [ "parent-for-child-${x}-${y}" ];
-          };
-        den.ctx.parent.into.child =
-          { x }:
+        den.schema.child.includes = [ ];
+        den.policies.test-parent-to-child =
+          { x, ... }:
+          let
+            inherit (den.lib.policy) resolve include;
+          in
           [
-            {
-              inherit x;
-              y = "derived";
-            }
+            (resolve.to "child" { y = "derived"; })
+            (include (
+              { x, y }:
+              {
+                funny.names = [ "child-${y}" ];
+              }
+            ))
+            (include (
+              { x, y }:
+              {
+                funny.names = [ "parent-for-child-${x}-${y}" ];
+              }
+            ))
           ];
-
-        den.ctx.child.provides.child =
-          { x, y }:
-          {
-            funny.names = [ "child-${y}" ];
-          };
-
-        expr = funnyNames (den.ctx.parent { x = "hello"; });
+        den.schema.parent.includes = [
+          (
+            { x }:
+            {
+              funny.names = [ "parent-${x}" ];
+            }
+          )
+          den.policies.test-parent-to-child
+        ];
+        expr = funnyNames (den.lib.resolveEntity "parent" { x = "hello"; });
         expected = [
           "child-derived"
           "parent-for-child-hello-derived"
@@ -54,38 +57,38 @@
         ...
       }:
       {
-        den.ctx.src.description = "source";
-        den.ctx.src.provides.src =
-          { x }:
-          {
-            funny.names = [ x ];
-          };
-        den.ctx.src.provides.dst =
-          _:
-          { x, i }:
-          {
-            funny.names = [ "src-for-${x}-${toString i}" ];
-          };
-        den.ctx.src.into.dst =
-          { x }:
+        den.schema.dst.includes = [ ];
+        den.policies.test-src-to-dst =
+          { x, ... }:
+          let
+            inherit (den.lib.policy) resolve include;
+          in
           [
-            {
-              inherit x;
-              i = 1;
-            }
-            {
-              inherit x;
-              i = 2;
-            }
+            (resolve.to "dst" { i = 1; })
+            (resolve.to "dst" { i = 2; })
+            (include (
+              { x, i }:
+              {
+                funny.names = [ "dst-${toString i}" ];
+              }
+            ))
+            (include (
+              { x, i }:
+              {
+                funny.names = [ "src-for-${x}-${toString i}" ];
+              }
+            ))
           ];
-
-        den.ctx.dst.provides.dst =
-          { x, i }:
-          {
-            funny.names = [ "dst-${toString i}" ];
-          };
-
-        expr = funnyNames (den.ctx.src { x = "a"; });
+        den.schema.src.includes = [
+          (
+            { x }:
+            {
+              funny.names = [ x ];
+            }
+          )
+          den.policies.test-src-to-dst
+        ];
+        expr = funnyNames (den.lib.resolveEntity "src" { x = "a"; });
         expected = [
           "a"
           "dst-1"
@@ -104,21 +107,31 @@
         ...
       }:
       {
-        den.ctx.src.description = "source without cross-provider";
-        den.ctx.src.provides.src =
-          { x }:
-          {
-            funny.names = [ x ];
-          };
-        den.ctx.src.into.dst = { x }: [ { y = x; } ];
-
-        den.ctx.dst.provides.dst =
-          { y }:
-          {
-            funny.names = [ "dst-${y}" ];
-          };
-
-        expr = funnyNames (den.ctx.src { x = "val"; });
+        den.schema.dst.includes = [ ];
+        den.policies.test-src-to-dst-no-cross =
+          { x, ... }:
+          let
+            inherit (den.lib.policy) resolve include;
+          in
+          [
+            (resolve.to "dst" { y = x; })
+            (include (
+              { y }:
+              {
+                funny.names = [ "dst-${y}" ];
+              }
+            ))
+          ];
+        den.schema.src.includes = [
+          (
+            { x }:
+            {
+              funny.names = [ x ];
+            }
+          )
+          den.policies.test-src-to-dst-no-cross
+        ];
+        expr = funnyNames (den.lib.resolveEntity "src" { x = "val"; });
         expected = [
           "dst-val"
           "val"

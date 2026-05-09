@@ -1,12 +1,5 @@
-{
-  den,
-  lib,
-  withSystem,
-  ...
-}:
+{ withSystem, ... }:
 let
-  inherit (den.lib) parametric;
-
   description = ''
     Provides the `flake-parts` `inputs'` (the flake's `inputs` with system pre-selected)
     as a top-level module argument.
@@ -41,7 +34,12 @@ let
       }
     );
 
-  osAspect = { host }: mkAspect host.class host.system;
+  osAspect =
+    { host }:
+    {
+      name = "inputs'/os";
+    }
+    // mkAspect host.class host.system;
 
   userAspect =
     {
@@ -49,14 +47,21 @@ let
       host,
     }:
     {
+      name = "inputs'/user";
       includes = map (c: mkAspect c host.system) user.classes;
     };
 
-  hmAspect = { home }: mkAspect home.class home.system;
+  hmAspect =
+    { home }:
+    {
+      name = "inputs'/home";
+    }
+    // mkAspect home.class home.system;
 
 in
 {
-  den.provides.inputs' = parametric.exactly {
+  den.provides.inputs' = {
+    name = "inputs'";
     inherit description;
     includes = [
       osAspect

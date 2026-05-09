@@ -6,7 +6,7 @@
 }:
 let
   no-flake-parts = !inputs ? flake-parts;
-  flakeModule = den.lib.aspects.resolve "flake" (den.ctx.flake { });
+  flakeModule = den.lib.aspects.resolve "flake" (den.lib.resolveEntity "flake" { });
   flake =
     (lib.evalModules {
       modules = [

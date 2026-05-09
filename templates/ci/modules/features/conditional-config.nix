@@ -10,6 +10,8 @@
         ...
       }:
       let
+        inherit (den.lib.policy) include;
+
         # A nixos module not always included
         # suppose this comes from inputs.<something>.nixosModules.default
         trueModule = {
@@ -41,9 +43,14 @@
           users.tux.hasBar = true;
         };
 
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
-
-        den.aspects.igloo.provides.to-users.includes = [ conditionalAspect ];
+        den.aspects.igloo.policies.to-users =
+          { host, user, ... }:
+          [
+            (include {
+              includes = [ conditionalAspect ];
+            })
+          ];
+        den.aspects.igloo.includes = [ den.aspects.igloo.policies.to-users ];
 
         expr = igloo.something;
         expected = "was-true";
@@ -59,6 +66,8 @@
         ...
       }:
       let
+        inherit (den.lib.policy) include;
+
         git-for-linux-only =
           { user, host, ... }:
           if user.userName == "tux" then { homeManager.programs.git.enable = true; } else { };
@@ -70,8 +79,14 @@
         };
 
         den.default.homeManager.home.stateVersion = "25.11";
-        den.ctx.user.includes = [ den.provides.mutual-provider ];
-        den.aspects.igloo.provides.to-users.includes = [ git-for-linux-only ];
+        den.aspects.igloo.policies.to-users =
+          { host, user, ... }:
+          [
+            (include {
+              includes = [ git-for-linux-only ];
+            })
+          ];
+        den.aspects.igloo.includes = [ den.aspects.igloo.policies.to-users ];
 
         expr = [
           tuxHm.programs.git.enable

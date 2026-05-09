@@ -1,13 +1,20 @@
 { den, inputs, ... }:
+let
+  inherit (den.lib.policy) route;
+in
 {
   imports = [ inputs.devshell.flakeModule ];
-  den.ctx.flake-parts.into.flake-parts-system = _: [
-    {
-      fromClass = _: "devshell";
-      intoPath = _: [
+  den.classes.devshell = { };
+  den.policies.to-flake-parts-system-devshell = _: [
+    (route {
+      fromClass = "devshell";
+      intoClass = "flake-parts";
+      path = [
         "devshells"
         "default"
       ];
-    }
+      adaptArgs = { config, ... }: config.allModuleArgs;
+    })
   ];
+  den.schema.flake-parts.includes = [ den.policies.to-flake-parts-system-devshell ];
 }
