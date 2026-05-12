@@ -24,10 +24,55 @@ let
     "__parametricResolvedArgs"
   ];
 
+  # Merge multiple attrset content values per sub-key so class keys
+  # collect all definitions instead of last-win overwrite.
+  mergeContentValuesPerKey =
+    rawValue:
+    let
+      cvs = rawValue.__contentValues;
+      vals = map (d: d.value) cvs;
+      attrVals = builtins.filter builtins.isAttrs vals;
+    in
+    if builtins.length attrVals <= 1 then
+      unwrapContentValuesRaw rawValue
+    else
+      let
+        allKeys = lib.unique (lib.concatMap builtins.attrNames attrVals);
+        collectKey =
+          key:
+          let
+            defsForKey = lib.concatMap (
+              cv:
+              if builtins.isAttrs cv.value && cv.value ? ${key} then
+                [
+                  {
+                    inherit (cv) file;
+                    value = cv.value.${key};
+                  }
+                ]
+              else
+                [ ]
+            ) cvs;
+          in
+          if builtins.length defsForKey == 1 then
+            (builtins.head defsForKey).value
+          else
+            {
+              __contentValues = defsForKey;
+              __provider = (rawValue.__provider or [ ]) ++ [ key ];
+            };
+      in
+      lib.genAttrs allKeys collectKey;
+
   emitNestedAspect =
     aspect: ctx: k:
     let
-      innerValue = unwrapContentValuesRaw aspect.${k};
+      rawValue = aspect.${k};
+      innerValue =
+        if builtins.isAttrs rawValue && rawValue ? __contentValues then
+          mergeContentValuesPerKey rawValue
+        else
+          rawValue;
       subAspect =
         (if builtins.isAttrs innerValue then innerValue else { })
         // {
@@ -73,6 +118,16 @@ in
                   })
                   (
                     classified:
+                    let
+                      # Content wrappers from aspectContentType (included via
+                      # den.aspects.X.Y in an includes list) carry __contentValues
+                      # at the top level.  Their nested sub-keys are independent
+                      # sub-aspects that should be included explicitly, not
+                      # auto-walked.  Sub-aspects from emitNestedAspect and full
+                      # aspects from aspectSubmodule do NOT have __contentValues
+                      # at the top level, so their nested keys auto-walk normally.
+                      nestedToWalk = lib.optionals (!(tagged ? __contentValues)) classified.nestedKeys;
+                    in
                     fx.bind
                       (fx.seq (
                         [
@@ -84,7 +139,7 @@ in
                           })
                           (registerConstraints tagged)
                         ]
-                        ++ map (emitNestedAspect tagged (param.ctx or { })) classified.nestedKeys
+                        ++ map (emitNestedAspect tagged (param.ctx or { })) nestedToWalk
                       ))
                       (
                         _:
