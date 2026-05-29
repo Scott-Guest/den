@@ -14,6 +14,47 @@
       }
     );
 
+    test-does-not-forward-user-description-to-custom-host = denTest (
+      {
+        config,
+        den,
+        lib,
+        ...
+      }:
+      let
+        mockCustomHostModule =
+          { lib, ... }:
+          {
+            config._module.freeformType = lib.types.lazyAttrsOf lib.types.unspecified;
+          };
+
+        igloo-custom-host = config.flake.iglooCustomHostConfigurations."igloo-custom-host";
+      in
+      {
+        den.classes.custom-host.description = "Custom host configuration";
+
+        den.hosts.x86_64-linux.igloo-custom-host = {
+          class = "custom-host";
+          intoAttr = [
+            "iglooCustomHostConfigurations"
+            "igloo-custom-host"
+          ];
+          instantiate =
+            { modules, ... }:
+            (lib.evalModules {
+              modules = [ mockCustomHostModule ] ++ modules;
+            }).config;
+        };
+
+        den.hosts.x86_64-linux.igloo-custom-host.users.tux = { };
+
+        den.aspects.tux.user.description = "pinguino";
+
+        expr = igloo-custom-host.users.users.tux.description or null;
+        expected = null;
+      }
+    );
+
     test-forwards-os-args = denTest (
       {
         den,
@@ -110,5 +151,6 @@
         expected = [ "wheel" ];
       }
     );
+
   };
 }
