@@ -14,28 +14,25 @@ let
     specifically for `user.classes`.
   '';
 
+  # Emit a deferred node spawn request. Resolution happens post-walk (in
+  # resolve.nix's drain augmentation) where the parent scope-tree state (host +
+  # siblings) exists, so the projection sees the fleet — a host-aspects-projected
+  # homeManager consumer of a fleet-collected pipe lists every peer. Ancestor
+  # bindings like `environment` arrive via the threaded scope context, not
+  # manual chainCtx threading.
   from-host =
-    { host, user }:
-    let
-      # Tag host.aspect with user context so parametric includes like
-      # { user }: ... can resolve during host-aspects re-resolution.
-      ctx = { inherit host user; };
-      scopeHandlers = den.lib.aspects.fx.handlers.constantHandler ctx;
-      aspectWithCtx = host.aspect // {
-        __scopeHandlers = scopeHandlers;
-      };
-    in
-    {
-      name = "host-aspects/${user.userName}@${host.name}";
-    }
-    // lib.genAttrs (user.classes or [ "homeManager" ]) (
-      class: den.lib.aspects.resolveImports class aspectWithCtx
-    );
+    { host, user, ... }: [ (den.lib.policy.spawn { classes = user.classes or [ "homeManager" ]; }) ];
 in
 {
   den.batteries.host-aspects = {
     name = "host-aspects";
     inherit description;
-    includes = [ from-host ];
+    includes = [
+      {
+        __isPolicy = true;
+        name = "host-aspects-project";
+        fn = from-host;
+      }
+    ];
   };
 }

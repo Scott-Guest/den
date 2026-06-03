@@ -92,6 +92,10 @@ let
           fromClass = _: className;
           intoClass = _: host.class;
           intoPath = _: forwardPathFn { inherit host user; };
+          # The forward source resolves via spawnNode (threaded with the
+          # parent scope-tree state), so parametric host aspects re-fired at the
+          # user scope bind the same ancestor args (e.g. `environment`) they
+          # would at the host scope — no manual chainCtx threading needed.
           fromAspect = _: den.lib.resolveEntity "user" { inherit host user; };
         };
 
