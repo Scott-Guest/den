@@ -7,19 +7,23 @@
 {
   den,
   lib,
+  inputs,
   ...
 }:
 let
-  inherit (den.lib) diag;
+  diagram = inputs.den-diagram.lib;
   allHosts = lib.concatMap builtins.attrValues (builtins.attrValues den.hosts);
 in
 {
   perSystem =
     { pkgs, ... }:
     let
-      rc = diag.renderContext { inherit pkgs; };
-      fleetCapture = diag.captureFleet { };
-      fleetData = diag.fleet.of { flakeName = "fleet-demo"; };
+      rc = diagram.renderContext { inherit pkgs; };
+      fleetCapture = den.lib.capture.captureFleet { };
+      fleetData = diagram.fleet.of {
+        hosts = den.hosts;
+        flakeName = "fleet-demo";
+      };
 
       # Strip %%{init: ...}%% frontmatter from mermaid source.
       # Produces clean diagrams that use the renderer's default theme
@@ -125,7 +129,8 @@ in
         let
           # Fleet-demo doesn't use WSL — filter out battery-injected aspects
           # that aren't relevant to this template's topology.
-          namespaceGraph = diag.graph.ofNamespace {
+          namespaceGraph = diagram.graph.ofNamespace {
+            aspects = den.aspects or { };
             filter = v: v.name != "wsl-host-aspect";
           };
           source = stripFrontmatter (rc.renderDense.toMermaid namespaceGraph);
@@ -162,7 +167,7 @@ in
 
       fleetSummarySection =
         let
-          summaryText = diag.text.fleetSummary fleetCapture;
+          summaryText = diagram.text.fleetSummary fleetCapture;
         in
         ''
           ## Fleet Summary
@@ -192,12 +197,16 @@ in
       hostGraphs = lib.listToAttrs (
         map (host: {
           name = host.name;
-          value = diag.hostContext { inherit host; };
+          value = diagram.projectScope {
+            inherit fleetCapture;
+            kind = "host";
+            name = host.name;
+          };
         }) allHosts
       );
       fleetIrDrv = pkgs.runCommand "fleet-ir.json" { nativeBuildInputs = [ pkgs.jq ]; } ''
         echo ${
-          lib.escapeShellArg (diag.fleetGraph.toJSON { inherit fleetCapture hostGraphs; })
+          lib.escapeShellArg (diagram.fleetGraph.toJSON { inherit fleetCapture hostGraphs; })
         } | jq . > $out
       '';
 
@@ -273,7 +282,7 @@ in
             `users.nix` promotes users to real entities (`den.schema.user.isEntity = true`)
             and extends the user schema with `email`, `groups`, and `ssh-keys` options.
             The registry type imports `den.schema.user` so each entry is a proper user
-            entity with `userName`, `classes`, and `aspect` — not a plain attrset.
+            entity with `userName`, `classes`, `aspect` — not a plain attrset.
 
             ## Policy-Driven Scope Tree
 
@@ -481,8 +490,8 @@ in
       );
     in
     {
-      packages = diag.export.entriesToPackages everyEntry // {
-        write-diagrams = diag.export.mkWriteScript pkgs {
+      packages = diagram.export.entriesToPackages everyEntry // {
+        write-diagrams = diagram.export.mkWriteScript pkgs {
           entries = everyEntry;
           galleries = [ ];
           inherit readmeDrv;

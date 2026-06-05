@@ -14,10 +14,11 @@
   den,
   lib,
   self,
+  inputs,
   ...
 }:
 let
-  inherit (den.lib) diag;
+  diagram = inputs.den-diagram.lib;
 
   allHosts = lib.concatMap builtins.attrValues (builtins.attrValues den.hosts);
 
@@ -29,7 +30,7 @@ in
   perSystem =
     { pkgs, ... }:
     let
-      theme = diag.themeFromBase16 {
+      theme = diagram.themeFromBase16 {
         inherit pkgs;
         scheme = themeScheme;
       };
@@ -54,7 +55,7 @@ in
         '';
       });
 
-      rc = diag.renderContext {
+      rc = diagram.renderContext {
         inherit pkgs theme;
         mermaidCli = mermaidCliPatched;
         mermaidConfig = {
@@ -69,7 +70,12 @@ in
         };
       };
 
-      fleetData = diag.fleet.of { flakeName = "diagram-demo"; };
+      fleetCapture = den.lib.capture.captureFleet { };
+
+      fleetData = diagram.fleet.of {
+        hosts = den.hosts;
+        flakeName = "diagram-demo";
+      };
 
       # --- Render control ---
       #
@@ -86,7 +92,7 @@ in
 
       # --- Helpers ---
 
-      inherit (diag.export)
+      inherit (diagram.export)
         entityEntries
         filterByRender
         mkGallery
@@ -97,14 +103,40 @@ in
 
       graphClasses = entity: lib.unique (lib.concatMap (n: n.classes or [ ]) entity.nodes);
 
+      # --- Scope projection helpers ---
+
+      mkHostEntity =
+        host:
+        diagram.projectScope {
+          inherit fleetCapture;
+          kind = "host";
+          name = host.name;
+        };
+
+      mkUserEntity =
+        u:
+        diagram.projectScope {
+          inherit fleetCapture;
+          kind = "user";
+          name = u.userName;
+        };
+
+      mkHomeEntity =
+        h:
+        diagram.projectScope {
+          inherit fleetCapture;
+          kind = "home";
+          name = h.home.name;
+        };
+
       # --- Host entries ---
 
       hostEntries = lib.concatMap (
         host:
         let
-          entity = diag.hostContext { inherit host; };
+          entity = mkHostEntity host;
         in
-        entityEntries { inherit pkgs rc diag; } {
+        entityEntries { inherit pkgs rc; } {
           inherit entity;
           name = host.name;
           dir = "hosts/${host.name}";
@@ -131,9 +163,9 @@ in
       userEntries = lib.concatMap (
         u:
         let
-          entity = diag.userContext { inherit (u) host user; };
+          entity = mkUserEntity u;
         in
-        entityEntries { inherit pkgs rc diag; } {
+        entityEntries { inherit pkgs rc; } {
           inherit entity;
           name = u.userName;
           dir = "hosts/${u.host.name}/users/${u.userName}";
@@ -157,9 +189,9 @@ in
         h:
         let
           safeName = lib.replaceStrings [ "@" ] [ "-at-" ] h.key;
-          entity = diag.homeContext { home = h.home; };
+          entity = mkHomeEntity h;
         in
-        entityEntries { inherit pkgs rc diag; } {
+        entityEntries { inherit pkgs rc; } {
           inherit entity;
           name = "home-${safeName}";
           dir = "homes/${safeName}";
@@ -169,19 +201,16 @@ in
 
       # --- Fleet entries ---
 
-      fleetEntriesList = diag.export.fleetEntries { inherit pkgs; } {
+      fleetEntriesList = diagram.export.fleetEntries { inherit pkgs; } {
         inherit fleetData;
         viewDefs = fleetViewDefs;
       };
 
-      # --- Fleet-level views from captureFleet ---
-      fleetCapture = diag.captureFleet { };
-
-      # Per-host graph IRs for fleet DAG composition.
+      # Per-host graph IRs for fleet DAG composition (from scope projection).
       hostGraphs = lib.listToAttrs (
         map (host: {
           name = host.name;
-          value = diag.hostContext { inherit host; };
+          value = mkHostEntity host;
         }) allHosts
       );
 
@@ -197,17 +226,17 @@ in
         };
 
       # --- Text summaries ---
-      fleetSummaryText = diag.text.fleetSummary fleetCapture;
+      fleetSummaryText = diagram.text.fleetSummary fleetCapture;
       fleetSummaryDrv = pkgs.writeText "fleet-summary.md" fleetSummaryText;
 
       hostSummaryDrvs = lib.listToAttrs (
         map (
           host:
           let
-            entity = diag.hostContext { inherit host; };
-            text = diag.text.hostSummary {
+            entity = mkHostEntity host;
+            text = diagram.text.hostSummary {
               graph = entity;
-              inherit host fleetCapture;
+              inherit fleetCapture;
             };
           in
           {
@@ -225,13 +254,21 @@ in
           rc.render.toPolicyResolutionMapMermaid;
       pipeSeqView = mkFleetView "pipe-sequence" "Pipe Sequence" rc.render.toPipeSequenceMermaid;
       fleetDagSource = rc.render.toFleetDagMermaid { inherit fleetCapture hostGraphs; };
-      fleetIrJson = diag.fleetGraph.toJSON { inherit fleetCapture hostGraphs; };
+      fleetIrJson = diagram.fleetGraph.toJSON { inherit fleetCapture hostGraphs; };
       fleetIrDrv = pkgs.runCommand "fleet-ir.json" { nativeBuildInputs = [ pkgs.jq ]; } ''
         echo ${lib.escapeShellArg fleetIrJson} | jq . > $out
       '';
       fleetDagView = {
         md = pkgs.writeText "fleet-dag.md" "# Fleet DAG\n\n![Fleet DAG](./fleet-dag.mmd.svg)\n\n```mermaid\n${fleetDagSource}\n```\n";
         svg = rc.mmdSourceToSvg "fleet-dag" fleetDagSource;
+      };
+
+      # --- Namespace view (explicit, not part of fleet views) ---
+      namespaceGraph = diagram.graph.ofNamespace { aspects = den.aspects or { }; };
+      namespaceSource = rc.renderDense.toMermaid namespaceGraph;
+      namespaceView = {
+        md = pkgs.writeText "namespace.md" "# Namespace\n\n![Namespace](./namespace.mmd.svg)\n\n```mermaid\n${namespaceSource}\n```\n";
+        svg = rc.mmdSourceToSvg "namespace" namespaceSource;
       };
 
       # --- Fleet view entries ---
@@ -276,6 +313,7 @@ in
         ++ mkFleetEntries "policy-resolution" policyMapView
         ++ mkFleetEntries "pipe-sequence" pipeSeqView
         ++ mkFleetEntries "fleet-dag" fleetDagView
+        ++ mkFleetEntries "namespace" namespaceView
         ++ [
           {
             name = "fleet";
@@ -360,7 +398,7 @@ in
       readmeDrv = pkgs.writeText "README.md" ''
         # Diag Demo
 
-        Aspect-resolution visualization via `den.lib.diag`.
+        Aspect-resolution visualization via `den-diagram`.
 
         ## Directory Structure
 
@@ -412,6 +450,7 @@ in
         | `policy-resolution` | Policy resolution map |
         | `pipe-sequence` | Pipe sequence diagram |
         | `fleet-dag` | Fleet-wide DAG |
+        | `namespace` | Aspect namespace graph |
         | `fleet-ir` | Graph IR (JSON, for ir-viewer) |
         | `summary` | Text summary (fleet + per-host) |
 
