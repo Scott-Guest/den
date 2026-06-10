@@ -51,8 +51,34 @@ let
     let
       targetKind = resolveTargetKind entityKind schemaEffect;
       resolveBindings = schemaEffect.schema.value;
-      scopedCtx = enrichedCtx // resolveBindings;
+      rawScopedCtx = enrichedCtx // resolveBindings;
       entityClass = resolveEntityClass targetKind resolveBindings;
+
+      # In-context `.hasAspect` answers PROJECTED membership — what's delivered
+      # into this scope (incl. `provides`), not the structural registry tree. The
+      # owning host's production run already bucketed each scope's path set under
+      # `__pathSetByScope`. The lookup is pure and forced lazily (at a class-module
+      # `mkIf`), so it never re-enters the resolve that produced it — except from
+      # an `includes` position, which forces the host's own in-flight
+      # `__resolveResult` and recurses. So: don't decide includes from it.
+      #
+      # Key by entity-kind bindings only: enrichment may add non-entity keys (e.g.
+      # `system`) to the ctx, but buckets are keyed by entity scope — restricting
+      # here keeps the lookup key matched. Only `.hasAspect` is swapped, and
+      # `mkScopeId` keys off `.name`, so the scope ids are otherwise unperturbed.
+      overrideKinds = builtins.filter (
+        k: schemaEntityKindsSet ? ${k} && builtins.isAttrs (rawScopedCtx.${k} or null)
+      ) (builtins.attrNames rawScopedCtx);
+      scopeId = mkScopeId (lib.getAttrs overrideKinds rawScopedCtx);
+      # Host run buckets every user scope; a host-less entity uses its own.
+      ownerPathSet =
+        rawScopedCtx.host.__pathSetByScope or rawScopedCtx.${targetKind}.__pathSetByScope or { };
+      projected = den.lib.aspects.mkProjectedHasAspect {
+        pathSetByScope = ownerPathSet;
+        inherit scopeId;
+      };
+      scopedCtx =
+        rawScopedCtx // lib.genAttrs overrideKinds (k: rawScopedCtx.${k} // { hasAspect = projected; });
     in
     {
       inherit
